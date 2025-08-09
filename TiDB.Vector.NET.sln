@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.35906.104 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiDB.Vector", "TiDB.Vector\TiDB.Vector.csproj", "{9DC14338-3F8E-42F0-BED1-21EE37FB65FB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiDB.Vector.Samples", "TiDB.Vector.Samples\TiDB.Vector.Samples.csproj", "{D6EA028A-54C4-41EA-9585-2943A7CD902B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9DC14338-3F8E-42F0-BED1-21EE37FB65FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9DC14338-3F8E-42F0-BED1-21EE37FB65FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9DC14338-3F8E-42F0-BED1-21EE37FB65FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9DC14338-3F8E-42F0-BED1-21EE37FB65FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D6EA028A-54C4-41EA-9585-2943A7CD902B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D6EA028A-54C4-41EA-9585-2943A7CD902B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D6EA028A-54C4-41EA-9585-2943A7CD902B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D6EA028A-54C4-41EA-9585-2943A7CD902B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {92B86090-EDF3-4289-A064-33F74C84CB03}
+	EndGlobalSection
+EndGlobal
