@@ -1,6 +1,5 @@
 using System;
 using TiDB.Vector.Abstractions;
-using TiDB.Vector.Models;
 
 namespace TiDB.Vector.Core
 {
@@ -12,8 +11,6 @@ namespace TiDB.Vector.Core
         private int _embeddingDimension = 1568; // default per project decision
         private IEmbeddingGenerator? _embeddingGenerator;
         private ITextGenerator? _textGenerator;
-        private IChunker? _chunker;
-        private ChunkingOptions _chunkingOptions = new();
         private bool _ensureSchema;
         private bool _createVectorIndex;
 
@@ -44,13 +41,6 @@ namespace TiDB.Vector.Core
         public TiDBVectorStoreBuilder UseTextGenerator(ITextGenerator generator)
         {
             _textGenerator = generator ?? throw new ArgumentNullException(nameof(generator));
-            return this;
-        }
-
-        public TiDBVectorStoreBuilder UseChunker(IChunker chunker, ChunkingOptions? options = null)
-        {
-            _chunker = chunker ?? throw new ArgumentNullException(nameof(chunker));
-            _chunkingOptions = options ?? _chunkingOptions;
             return this;
         }
 
@@ -90,8 +80,6 @@ namespace TiDB.Vector.Core
                 _embeddingDimension,
                 _embeddingGenerator,
                 _textGenerator,
-                _chunker,
-                _chunkingOptions,
                 _ensureSchema,
                 _createVectorIndex);
         }

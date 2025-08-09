@@ -19,8 +19,6 @@ namespace TiDB.Vector.Core
         private readonly int _embeddingDimension;
         private readonly IEmbeddingGenerator? _embeddingGenerator;
         private readonly ITextGenerator? _textGenerator;
-        private readonly IChunker? _chunker;
-        private readonly ChunkingOptions _chunkingOptions;
         private readonly bool _ensureSchema;
         private readonly bool _createVectorIndex;
 
@@ -31,8 +29,6 @@ namespace TiDB.Vector.Core
             int embeddingDimension,
             IEmbeddingGenerator? embeddingGenerator,
             ITextGenerator? textGenerator,
-            IChunker? chunker,
-            ChunkingOptions chunkingOptions,
             bool ensureSchema,
             bool createVectorIndex)
         {
@@ -42,8 +38,6 @@ namespace TiDB.Vector.Core
             _embeddingDimension = embeddingDimension;
             _embeddingGenerator = embeddingGenerator;
             _textGenerator = textGenerator;
-            _chunker = chunker;
-            _chunkingOptions = chunkingOptions;
             _ensureSchema = ensureSchema;
             _createVectorIndex = createVectorIndex;
         }
