@@ -73,7 +73,12 @@ namespace TiDB.Vector.Core
                 await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            // Vector index will be handled in Iteration 3; ignore createIndex here intentionally
+            if (createIndex)
+            {
+                // Best effort: ensure a TiFlash replica exists (ignored if not supported or already set)
+                await EnsureTiFlashReplicaAsync(conn, cancellationToken).ConfigureAwait(false);
+                await CreateVectorIndexAsync(conn, cancellationToken).ConfigureAwait(false);
+            }
         }
 
         public async Task UpsertAsync(
@@ -184,8 +189,14 @@ ON DUPLICATE KEY UPDATE
                 ? "VEC_COSINE_DISTANCE(embedding, @queryVec)"
                 : "VEC_L2_DISTANCE(embedding, @queryVec)";
 
-            string sql = $@"SELECT id, collection, content, metadata, {distanceExpr} AS distance
-FROM tidb_vectors
+            // To leverage ANN index, perform KNN first, then filter collection in outer query.
+            int kPrime = Math.Max(topK * 3, topK + 20);
+            string sql = $@"SELECT * FROM (
+  SELECT id, collection, content, metadata, {distanceExpr} AS distance
+  FROM tidb_vectors
+  ORDER BY distance
+  LIMIT @kPrime
+) t
 WHERE collection = @collection
 ORDER BY distance
 LIMIT @k";
@@ -196,6 +207,7 @@ LIMIT @k";
             await using var cmd = new MySqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@collection", _defaultCollection);
             cmd.Parameters.AddWithValue("@queryVec", queryText);
+            cmd.Parameters.AddWithValue("@kPrime", kPrime);
             cmd.Parameters.AddWithValue("@k", topK);
 
             await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
@@ -223,6 +235,74 @@ LIMIT @k";
             }
 
             return results;
+        }
+
+        public async Task CompactAsync(CancellationToken cancellationToken = default)
+        {
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+            const string sql = "ALTER TABLE tidb_vectors COMPACT;";
+            try
+            {
+                await using var cmd = new MySqlCommand(sql, conn);
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (MySqlException)
+            {
+                // Best-effort; ignore if unsupported or lacks privileges
+            }
+        }
+
+        public async Task<bool> IsVectorIndexUsedAsync(string testQuery, int topK = 5, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(testQuery)) return false;
+
+            // Build an EXPLAIN for our standard KNN query to look for 'annIndex:' in operator info
+            var queryVec = _embeddingGenerator == null
+                ? new float[_embeddingDimension]
+                : await _embeddingGenerator.GenerateAsync(testQuery, cancellationToken).ConfigureAwait(false);
+
+            if (queryVec.Length != _embeddingDimension) Array.Resize(ref queryVec, _embeddingDimension);
+            string queryText = VectorToText(queryVec);
+
+            string distanceExpr = _distanceFunction == DistanceFunction.Cosine
+                ? "VEC_COSINE_DISTANCE(embedding, @queryVec)"
+                : "VEC_L2_DISTANCE(embedding, @queryVec)";
+
+            int kPrime = Math.Max(topK * 3, topK + 20);
+            string explain = $@"EXPLAIN SELECT * FROM (
+  SELECT id, collection, content, metadata, {distanceExpr} AS distance
+  FROM tidb_vectors
+  ORDER BY distance
+  LIMIT @kPrime
+) t
+WHERE collection = @collection
+ORDER BY distance
+LIMIT @k";
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await using var cmd = new MySqlCommand(explain, conn);
+            cmd.Parameters.AddWithValue("@collection", _defaultCollection);
+            cmd.Parameters.AddWithValue("@queryVec", queryText);
+            cmd.Parameters.AddWithValue("@kPrime", kPrime);
+            cmd.Parameters.AddWithValue("@k", topK);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    if (!reader.IsDBNull(i))
+                    {
+                        var val = reader.GetValue(i)?.ToString();
+                        if (!string.IsNullOrEmpty(val) && val.IndexOf("annIndex:", StringComparison.OrdinalIgnoreCase) >= 0)
+                            return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         public async Task<Answer> AskAsync(
@@ -256,6 +336,43 @@ LIMIT @k";
             }
             sb.Append(']');
             return sb.ToString();
+        }
+
+        private async Task EnsureTiFlashReplicaAsync(MySqlConnection conn, CancellationToken cancellationToken)
+        {
+            const string sql = "ALTER TABLE tidb_vectors SET TIFLASH REPLICA 1;";
+            try
+            {
+                await using var cmd = new MySqlCommand(sql, conn);
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (MySqlException)
+            {
+                // Ignore if not supported or already configured
+            }
+        }
+
+        private async Task CreateVectorIndexAsync(MySqlConnection conn, CancellationToken cancellationToken)
+        {
+            string indexName = _distanceFunction == DistanceFunction.Cosine
+                ? "idx_tidb_vectors_embedding_cosine"
+                : "idx_tidb_vectors_embedding_l2";
+
+            string createSql = _distanceFunction == DistanceFunction.Cosine
+                ? $"CREATE VECTOR INDEX {indexName} ON tidb_vectors ((VEC_COSINE_DISTANCE(embedding))) USING HNSW;"
+                : $"CREATE VECTOR INDEX {indexName} ON tidb_vectors ((VEC_L2_DISTANCE(embedding))) USING HNSW;";
+
+            try
+            {
+                await using var cmd = new MySqlCommand(createSql, conn);
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (MySqlException ex)
+            {
+                // Ignore if index already exists
+                if (!ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+                    throw;
+            }
         }
     }
 }
