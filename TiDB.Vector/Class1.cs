@@ -1,7 +1,5 @@
 ﻿namespace TiDB.Vector
 {
-    public class Class1
-    {
-
-    }
+    // Placeholder to keep project compiling before core types are used by consumers.
+    internal class Class1 { }
 }
