@@ -15,8 +15,8 @@ await store.UpsertAsync(new UpsertItem
     Id = "sample-1",
     Collection = "docs",
     Content = "Hello TiDB Vector",
-    Metadata = JsonDocument.Parse("{\"source\":\"sample\"}")
+    Metadata = JsonDocument.Parse("{\"source\":\"sample\"}"),
+    // Provide an explicit embedding to avoid needing an embedding generator in this sample
+    Embedding = new float[1568]
 });
-
-var results = await store.SearchAsync("hello", topK: 3);
-Console.WriteLine($"Search results: {results.Count}");
+Console.WriteLine("Schema ensured and sample row upserted.");

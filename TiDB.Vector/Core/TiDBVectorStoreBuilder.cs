@@ -9,7 +9,7 @@ namespace TiDB.Vector.Core
         private readonly string _connectionString;
         private string _defaultCollection = "default";
         private DistanceFunction _distanceFunction = DistanceFunction.Cosine;
-        private int _embeddingDimension = 0;
+        private int _embeddingDimension = 1568; // default per project decision
         private IEmbeddingGenerator? _embeddingGenerator;
         private ITextGenerator? _textGenerator;
         private IChunker? _chunker;

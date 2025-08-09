@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using TiDB.Vector.Abstractions;
 using TiDB.Vector.Models;
 using TiDB.Vector.Options;
+using MySqlConnector;
+using System.Text;
+using System.Text.Json;
 
 namespace TiDB.Vector.Core
 {
@@ -47,9 +50,30 @@ namespace TiDB.Vector.Core
 
         public async Task EnsureSchemaAsync(bool? createVectorIndex = null, CancellationToken cancellationToken = default)
         {
-            _ = createVectorIndex ?? _createVectorIndex;
-            // Iteration 2 will implement actual DDL logic.
-            await Task.CompletedTask;
+            bool createIndex = createVectorIndex ?? _createVectorIndex;
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+            // Create table tidb_vectors with composite PK (collection, id)
+            // VECTOR dimension is fixed to _embeddingDimension to enable ANN index in iteration 3
+            string ddl = @$"CREATE TABLE IF NOT EXISTS tidb_vectors (
+                collection  VARCHAR(128) NOT NULL,
+                id          VARCHAR(64) NOT NULL,
+                content     TEXT NULL,
+                metadata    JSON NULL,
+                embedding   VECTOR({_embeddingDimension}) NOT NULL,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (collection, id)
+            );";
+
+            await using (var cmd = new MySqlCommand(ddl, conn))
+            {
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            // Vector index will be handled in Iteration 3; ignore createIndex here intentionally
         }
 
         public async Task UpsertAsync(
@@ -57,9 +81,40 @@ namespace TiDB.Vector.Core
             UpsertOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            _ = item;
-            _ = options;
-            await Task.CompletedTask;
+            if (item is null) throw new ArgumentNullException(nameof(item));
+            var collection = string.IsNullOrWhiteSpace(item.Collection) ? _defaultCollection : item.Collection;
+
+            float[] embedding = item.Embedding ?? Array.Empty<float>();
+            if (embedding.Length == 0)
+            {
+                if (_embeddingGenerator == null)
+                    throw new InvalidOperationException("No embedding provided and no IEmbeddingGenerator configured.");
+                embedding = await _embeddingGenerator.GenerateAsync(item.Content ?? string.Empty, cancellationToken).ConfigureAwait(false);
+            }
+            if (_embeddingDimension > 0 && embedding.Length != _embeddingDimension)
+                throw new InvalidOperationException($"Embedding dimension {embedding.Length} does not match configured {_embeddingDimension}.");
+
+            string embeddingText = VectorToText(embedding);
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+            const string sql = @"INSERT INTO tidb_vectors (collection, id, content, metadata, embedding)
+VALUES (@collection, @id, @content, @metadata, CAST(@embeddingText AS VECTOR))
+ON DUPLICATE KEY UPDATE
+  content = VALUES(content),
+  metadata = VALUES(metadata),
+  embedding = VALUES(embedding),
+  updated_at = CURRENT_TIMESTAMP;";
+
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@collection", collection);
+            cmd.Parameters.AddWithValue("@id", item.Id);
+            cmd.Parameters.AddWithValue("@content", (object?)item.Content ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@metadata", item.Metadata is null ? DBNull.Value : JsonSerializer.Serialize(item.Metadata));
+            cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
+
+            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public async Task UpsertBatchAsync(
@@ -67,9 +122,47 @@ namespace TiDB.Vector.Core
             UpsertOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            _ = items;
-            _ = options;
-            await Task.CompletedTask;
+            if (items is null) throw new ArgumentNullException(nameof(items));
+            var list = items as IList<UpsertItem> ?? new List<UpsertItem>(items);
+            if (list.Count == 0) return;
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await using var tx = await conn.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+            const string sql = @"INSERT INTO tidb_vectors (collection, id, content, metadata, embedding)
+VALUES (@collection, @id, @content, @metadata, CAST(@embeddingText AS VECTOR))
+ON DUPLICATE KEY UPDATE
+  content = VALUES(content),
+  metadata = VALUES(metadata),
+  embedding = VALUES(embedding),
+  updated_at = CURRENT_TIMESTAMP;";
+
+            foreach (var item in list)
+            {
+                var collection = string.IsNullOrWhiteSpace(item.Collection) ? _defaultCollection : item.Collection;
+                float[] embedding = item.Embedding ?? Array.Empty<float>();
+                if (embedding.Length == 0)
+                {
+                    if (_embeddingGenerator == null)
+                        throw new InvalidOperationException("No embedding provided and no IEmbeddingGenerator configured.");
+                    embedding = await _embeddingGenerator.GenerateAsync(item.Content ?? string.Empty, cancellationToken).ConfigureAwait(false);
+                }
+                if (_embeddingDimension > 0 && embedding.Length != _embeddingDimension)
+                    throw new InvalidOperationException($"Embedding dimension {embedding.Length} does not match configured {_embeddingDimension}.");
+
+                string embeddingText = VectorToText(embedding);
+
+                await using var cmd = new MySqlCommand(sql, conn, tx);
+                cmd.Parameters.AddWithValue("@collection", collection);
+                cmd.Parameters.AddWithValue("@id", item.Id);
+                cmd.Parameters.AddWithValue("@content", (object?)item.Content ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@metadata", item.Metadata is null ? DBNull.Value : JsonSerializer.Serialize(item.Metadata));
+                cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<IReadOnlyList<SearchResult>> SearchAsync(
@@ -78,11 +171,58 @@ namespace TiDB.Vector.Core
             object? searchOptions = null,
             CancellationToken cancellationToken = default)
         {
-            _ = query;
-            _ = topK;
-            _ = searchOptions;
-            await Task.CompletedTask;
-            return Array.Empty<SearchResult>();
+            if (string.IsNullOrWhiteSpace(query)) return Array.Empty<SearchResult>();
+            if (_embeddingGenerator == null)
+                throw new InvalidOperationException("Search requires an IEmbeddingGenerator to embed the query.");
+
+            var queryVec = await _embeddingGenerator.GenerateAsync(query, cancellationToken).ConfigureAwait(false);
+            if (_embeddingDimension > 0 && queryVec.Length != _embeddingDimension)
+                throw new InvalidOperationException($"Query embedding dimension {queryVec.Length} does not match configured {_embeddingDimension}.");
+            string queryText = VectorToText(queryVec);
+
+            string distanceExpr = _distanceFunction == DistanceFunction.Cosine
+                ? "VEC_COSINE_DISTANCE(embedding, @queryVec)"
+                : "VEC_L2_DISTANCE(embedding, @queryVec)";
+
+            string sql = $@"SELECT id, collection, content, metadata, {distanceExpr} AS distance
+FROM tidb_vectors
+WHERE collection = @collection
+ORDER BY distance
+LIMIT @k";
+
+            var results = new List<SearchResult>(topK);
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@collection", _defaultCollection);
+            cmd.Parameters.AddWithValue("@queryVec", queryText);
+            cmd.Parameters.AddWithValue("@k", topK);
+
+            await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var id = reader.GetString(reader.GetOrdinal("id"));
+                var collection = reader.GetString(reader.GetOrdinal("collection"));
+                string? content = reader.IsDBNull(reader.GetOrdinal("content")) ? null : reader.GetString(reader.GetOrdinal("content"));
+                JsonDocument? metadata = null;
+                if (!reader.IsDBNull(reader.GetOrdinal("metadata")))
+                {
+                    var json = reader.GetString(reader.GetOrdinal("metadata"));
+                    metadata = JsonDocument.Parse(json);
+                }
+                double distance = reader.GetDouble(reader.GetOrdinal("distance"));
+
+                results.Add(new SearchResult
+                {
+                    Id = id,
+                    Collection = collection,
+                    Content = content,
+                    Metadata = metadata,
+                    Distance = distance
+                });
+            }
+
+            return results;
         }
 
         public async Task<Answer> AskAsync(
@@ -101,6 +241,21 @@ namespace TiDB.Vector.Core
         public ValueTask DisposeAsync()
         {
             return ValueTask.CompletedTask;
+        }
+
+        private static string VectorToText(IReadOnlyList<float> vector)
+        {
+            // Produce normalized format like: [0.3,0.5,-0.1]
+            var sb = new StringBuilder();
+            sb.Append('[');
+            for (int i = 0; i < vector.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                // invariant culture to avoid locale decimal commas
+                sb.Append(vector[i].ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            sb.Append(']');
+            return sb.ToString();
         }
     }
 }
