@@ -1,15 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="OpenAI" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\TiDB.Vector\TiDB.Vector.csproj" />
-    <ProjectReference Include="..\TiDB.Vector.OpenAI\TiDB.Vector.OpenAI.csproj" />
   </ItemGroup>
 
 </Project>
