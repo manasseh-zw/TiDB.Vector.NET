@@ -1,22 +1,28 @@
 ﻿using System.Text.Json;
 using TiDB.Vector.Core;
 using TiDB.Vector.Models;
+using TiDB.Vector.OpenAI.Builder;
+using TiDB.Vector.Samples.Samples;
 
-var store = new TiDBVectorStoreBuilder("Server=localhost;Port=4000;User ID=root;Password=;Database=test;")
+// Load from .env via DotEnv.Net
+TiDB.Vector.Samples.AppConfig.Load();
+var apiKey = TiDB.Vector.Samples.AppConfig.OpenAIApiKey;
+var connString = TiDB.Vector.Samples.AppConfig.TiDBConnectionString;
+
+var store = new TiDBVectorStoreBuilder(connString)
     .WithDefaultCollection("docs")
     .WithDistanceFunction(DistanceFunction.Cosine)
-    .EnsureSchema(createVectorIndex: false)
+    .AddOpenAITextEmbedding(apiKey: apiKey, model: "text-embedding-3-small", dimension: 1536)
+    .AddOpenAIChatCompletion(apiKey: apiKey, model: "gpt-4o-mini")
+    .EnsureSchema(createVectorIndex: true)
     .Build();
 
 await store.EnsureSchemaAsync();
+await UpsertSample.RunAsync(store);
+await SearchSample.RunAsync(store);
 
-await store.UpsertAsync(new UpsertItem
-{
-    Id = "sample-1",
-    Collection = "docs",
-    Content = "Hello TiDB Vector",
-    Metadata = JsonDocument.Parse("{\"source\":\"sample\"}"),
-    // Provide an explicit embedding to avoid needing an embedding generator in this sample
-    Embedding = new float[1568]
-});
-Console.WriteLine("Schema ensured and sample row upserted.");
+// Optional: check if ANN index is used
+var idxUsed = await store.IsVectorIndexUsedAsync("a swimming animal", topK: 3);
+Console.WriteLine($"Vector index used: {idxUsed}");
+
+await AskSample.RunAsync(store);

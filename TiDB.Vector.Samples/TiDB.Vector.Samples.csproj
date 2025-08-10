@@ -12,4 +12,8 @@
     <ProjectReference Include="..\TiDB.Vector.OpenAI\TiDB.Vector.OpenAI.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="dotenv.net" Version="4.0.0" />
+  </ItemGroup>
+
 </Project>

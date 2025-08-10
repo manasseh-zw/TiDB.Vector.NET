@@ -305,11 +305,54 @@ LIMIT @k";
             object? answerOptions = null,
             CancellationToken cancellationToken = default)
         {
-            _ = query;
-            _ = topK;
-            _ = answerOptions;
-            await Task.CompletedTask;
-            return new Answer { Text = "Not implemented", Sources = Array.Empty<Citation>() };
+            if (string.IsNullOrWhiteSpace(query))
+                return new Answer { Text = string.Empty, Sources = Array.Empty<Citation>() };
+            if (_textGenerator == null)
+                throw new InvalidOperationException("Ask requires an ITextGenerator to be configured.");
+
+            var hits = await SearchAsync(query, topK, null, cancellationToken).ConfigureAwait(false);
+
+            var sb = new StringBuilder();
+            sb.AppendLine("You are a helpful assistant. Use the provided context to answer the user's question. If the answer isn't in the context, say you don't know. Keep answers concise. Cite source ids when relevant.");
+            string system = sb.ToString();
+
+            var contextBuilder = new StringBuilder();
+            for (int i = 0; i < hits.Count; i++)
+            {
+                var h = hits[i];
+                contextBuilder.AppendLine($"[SourceId: {h.Id}] (distance={h.Distance:0.0000})");
+                if (!string.IsNullOrEmpty(h.Content))
+                {
+                    // Limit content length to avoid exceeding token limits in examples
+                    var content = h.Content.Length > 1500 ? h.Content.Substring(0, 1500) + "..." : h.Content;
+                    contextBuilder.AppendLine(content);
+                }
+                contextBuilder.AppendLine();
+            }
+
+            var messages = new List<(string role, string content)>
+            {
+                ("user", $"CONTEXT:\n{contextBuilder}\nQUESTION: {query}")
+            };
+
+            string answerText = await _textGenerator.CompleteAsync(system, messages, cancellationToken).ConfigureAwait(false);
+
+            var citations = new List<Citation>(hits.Count);
+            foreach (var h in hits)
+            {
+                citations.Add(new Citation
+                {
+                    Id = h.Id,
+                    Snippet = h.Content,
+                    Distance = h.Distance
+                });
+            }
+
+            return new Answer
+            {
+                Text = answerText,
+                Sources = citations
+            };
         }
 
         public ValueTask DisposeAsync()
@@ -356,6 +399,26 @@ LIMIT @k";
                 ? $"CREATE VECTOR INDEX {indexName} ON tidb_vectors ((VEC_COSINE_DISTANCE(embedding))) USING HNSW;"
                 : $"CREATE VECTOR INDEX {indexName} ON tidb_vectors ((VEC_L2_DISTANCE(embedding))) USING HNSW;";
 
+            // Pre-check via INFORMATION_SCHEMA.TIFLASH_INDEXES if possible
+            try
+            {
+                const string existsSql = @"SELECT COUNT(1) FROM INFORMATION_SCHEMA.TIFLASH_INDEXES
+WHERE TIDB_DATABASE = DATABASE() AND TIDB_TABLE = 'tidb_vectors' AND INDEX_NAME = @indexName;";
+                await using (var existsCmd = new MySqlCommand(existsSql, conn))
+                {
+                    existsCmd.Parameters.AddWithValue("@indexName", indexName);
+                    var countObj = await existsCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                    if (countObj != null && Convert.ToInt64(countObj) > 0)
+                    {
+                        return; // index already exists
+                    }
+                }
+            }
+            catch (MySqlException)
+            {
+                // Best effort; continue to attempt creating the index
+            }
+
             try
             {
                 await using var cmd = new MySqlCommand(createSql, conn);
@@ -363,9 +426,14 @@ LIMIT @k";
             }
             catch (MySqlException ex)
             {
-                // Ignore if index already exists
-                if (!ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
-                    throw;
+                // Ignore if index already exists (message variants)
+                var msg = ex.Message ?? string.Empty;
+                var lower = msg.ToLowerInvariant();
+                if (lower.Contains("already exist") || (lower.Contains("duplicate") && lower.Contains("index")))
+                {
+                    return;
+                }
+                throw;
             }
         }
     }
