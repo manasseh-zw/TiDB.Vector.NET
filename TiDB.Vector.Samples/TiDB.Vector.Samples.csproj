@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="Samples/content/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\TiDB.Vector\TiDB.Vector.csproj" />
     <ProjectReference Include="..\TiDB.Vector.OpenAI\TiDB.Vector.OpenAI.csproj" />
   </ItemGroup>

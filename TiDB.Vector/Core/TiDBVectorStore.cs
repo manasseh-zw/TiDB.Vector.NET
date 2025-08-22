@@ -57,7 +57,7 @@ namespace TiDB.Vector.Core
                 collection  VARCHAR(128) NOT NULL,
                 id          VARCHAR(64) NOT NULL,
                 content     TEXT NULL,
-                metadata    JSON NULL,
+                metadata    JSON NULL, 
                 embedding   VECTOR({_embeddingDimension}) NOT NULL,
                 created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
