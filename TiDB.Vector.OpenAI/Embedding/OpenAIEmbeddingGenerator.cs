@@ -30,7 +30,7 @@ namespace TiDB.Vector.OpenAI.Embedding
 
         public async Task<IReadOnlyList<float[]>> GenerateBatchAsync(IEnumerable<string> texts, CancellationToken cancellationToken = default)
         {
-            var inputs = texts as string[] ?? texts.ToArray();
+            var inputs = texts as string[] ?? [.. texts];
             if (inputs.Length == 0) return Array.Empty<float[]>();
 
             var options = new EmbeddingGenerationOptions { Dimensions = this.Dimension };

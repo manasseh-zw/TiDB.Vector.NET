@@ -1,13 +1,12 @@
-﻿using System.Text.Json;
-using TiDB.Vector.Core;
-using TiDB.Vector.Models;
+﻿using TiDB.Vector.Core;
 using TiDB.Vector.OpenAI.Builder;
+using TiDB.Vector.Samples;
 using TiDB.Vector.Samples.Samples;
 
 // Load from .env via DotEnv.Net
-TiDB.Vector.Samples.AppConfig.Load();
-var apiKey = TiDB.Vector.Samples.AppConfig.OpenAIApiKey;
-var connString = TiDB.Vector.Samples.AppConfig.TiDBConnectionString;
+AppConfig.Load();
+var apiKey = AppConfig.OpenAIApiKey;
+var connString = AppConfig.TiDBConnectionString;
 
 var store = new TiDBVectorStoreBuilder(connString)
     .WithDefaultCollection("docs")

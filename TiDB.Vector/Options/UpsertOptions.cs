@@ -7,6 +7,7 @@ namespace TiDB.Vector.Options
         public int MaxTokensPerChunk { get; init; } = 600;
         public int OverlapTokens { get; init; } = 80;
         public string? ChunkHeader { get; init; }
+        public bool StripHtml { get; init; } = false;
     }
 }
 

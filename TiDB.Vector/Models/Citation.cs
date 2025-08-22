@@ -1,4 +1,6 @@
 namespace TiDB.Vector.Models
+
+
 {
     public sealed record Citation
     {

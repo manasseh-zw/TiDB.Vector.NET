@@ -8,6 +8,8 @@ using TiDB.Vector.Options;
 using MySqlConnector;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using SemanticSlicer;
 
 namespace TiDB.Vector.Core
 {
@@ -80,25 +82,34 @@ namespace TiDB.Vector.Core
             UpsertOptions? options = null,
             CancellationToken cancellationToken = default)
         {
-            if (item is null) throw new ArgumentNullException(nameof(item));
+            ArgumentNullException.ThrowIfNull(item);
             var collection = string.IsNullOrWhiteSpace(item.Collection) ? _defaultCollection : item.Collection;
 
-            float[] embedding = item.Embedding ?? Array.Empty<float>();
-            if (embedding.Length == 0)
+            options ??= new UpsertOptions();
+
+            // If chunking requested and no precomputed embedding provided, slice and upsert chunks
+            if (options.UseChunking && (item.Embedding == null) && !string.IsNullOrEmpty(item.Content))
             {
                 if (_embeddingGenerator == null)
-                    throw new InvalidOperationException("No embedding provided and no IEmbeddingGenerator configured.");
-                embedding = await _embeddingGenerator.GenerateAsync(item.Content ?? string.Empty, cancellationToken).ConfigureAwait(false);
-            }
-            if (_embeddingDimension > 0 && embedding.Length != _embeddingDimension)
-                throw new InvalidOperationException($"Embedding dimension {embedding.Length} does not match configured {_embeddingDimension}.");
+                    throw new InvalidOperationException("Chunking requires an IEmbeddingGenerator to be configured.");
 
-            string embeddingText = VectorToText(embedding);
+                var slicerOptions = BuildSlicerOptions(item.ContentType, options);
+                var slicer = new Slicer(slicerOptions);
+                var header = options.ChunkHeader ?? string.Empty;
+                var chunks = slicer.GetDocumentChunks(item.Content!, null, header);
 
-            await using var conn = new MySqlConnection(_connectionString);
-            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+                // Batch embed all chunk contents
+                var chunkContents = new List<string>(chunks.Count);
+                foreach (var c in chunks) chunkContents.Add(c.Content);
+                var embeddings = await _embeddingGenerator.GenerateBatchAsync(chunkContents, cancellationToken).ConfigureAwait(false);
 
-            const string sql = @"INSERT INTO tidb_vectors (collection, id, content, metadata, embedding)
+                if (embeddings.Count != chunks.Count)
+                    throw new InvalidOperationException("Embedding count did not match chunk count.");
+
+                await using var conn = new MySqlConnection(_connectionString);
+                await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+                const string sqlChunk = @"INSERT INTO tidb_vectors (collection, id, content, metadata, embedding)
 VALUES (@collection, @id, @content, @metadata, CAST(@embeddingText AS VECTOR))
 ON DUPLICATE KEY UPDATE
   content = VALUES(content),
@@ -106,14 +117,71 @@ ON DUPLICATE KEY UPDATE
   embedding = VALUES(embedding),
   updated_at = CURRENT_TIMESTAMP;";
 
-            await using var cmd = new MySqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("@collection", collection);
-            cmd.Parameters.AddWithValue("@id", item.Id);
-            cmd.Parameters.AddWithValue("@content", (object?)item.Content ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@metadata", item.Metadata is null ? DBNull.Value : JsonSerializer.Serialize(item.Metadata));
-            cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
+                for (int i = 0; i < chunks.Count; i++)
+                {
+                    var emb = embeddings[i];
+                    if (_embeddingDimension > 0 && emb.Length != _embeddingDimension)
+                        throw new InvalidOperationException($"Embedding dimension {emb.Length} does not match configured {_embeddingDimension}.");
+                    string embeddingTextChunk = VectorToText(emb);
 
-            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    string chunkId = item.Id + "/c" + chunks[i].Index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    string? content = chunks[i].Content;
+
+                    // Merge metadata with chunk info
+                    var metaNode = item.Metadata is null
+                        ? new JsonObject()
+                        : JsonNode.Parse(item.Metadata.RootElement.GetRawText()) as JsonObject ?? new JsonObject();
+                    metaNode["parentId"] = item.Id;
+                    metaNode["chunkIndex"] = chunks[i].Index;
+                    metaNode["contentType"] = item.ContentType.ToString();
+
+                    string metadataJson = metaNode.ToJsonString();
+
+                    await using var cmd = new MySqlCommand(sqlChunk, conn);
+                    cmd.Parameters.AddWithValue("@collection", collection);
+                    cmd.Parameters.AddWithValue("@id", chunkId);
+                    cmd.Parameters.AddWithValue("@content", (object?)content ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@metadata", metadataJson);
+                    cmd.Parameters.AddWithValue("@embeddingText", embeddingTextChunk);
+                    await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+                return;
+            }
+            else
+            {
+                // Single-row upsert (no chunking or embedding provided)
+                float[] embedding = item.Embedding ?? [];
+                if (embedding.Length == 0)
+                {
+                    if (_embeddingGenerator == null)
+                        throw new InvalidOperationException("No embedding provided and no IEmbeddingGenerator configured.");
+                    embedding = await _embeddingGenerator.GenerateAsync(item.Content ?? string.Empty, cancellationToken).ConfigureAwait(false);
+                }
+                if (_embeddingDimension > 0 && embedding.Length != _embeddingDimension)
+                    throw new InvalidOperationException($"Embedding dimension {embedding.Length} does not match configured {_embeddingDimension}.");
+
+                string embeddingText = VectorToText(embedding);
+
+                await using var conn = new MySqlConnection(_connectionString);
+                await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+                const string sql = @"INSERT INTO tidb_vectors (collection, id, content, metadata, embedding)
+VALUES (@collection, @id, @content, @metadata, CAST(@embeddingText AS VECTOR))
+ON DUPLICATE KEY UPDATE
+  content = VALUES(content),
+  metadata = VALUES(metadata),
+  embedding = VALUES(embedding),
+  updated_at = CURRENT_TIMESTAMP;";
+
+                await using var cmd = new MySqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@collection", collection);
+                cmd.Parameters.AddWithValue("@id", item.Id);
+                cmd.Parameters.AddWithValue("@content", (object?)item.Content ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@metadata", item.Metadata is null ? DBNull.Value : JsonSerializer.Serialize(item.Metadata));
+                cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
+
+                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
 
         public async Task UpsertBatchAsync(
@@ -122,8 +190,10 @@ ON DUPLICATE KEY UPDATE
             CancellationToken cancellationToken = default)
         {
             if (items is null) throw new ArgumentNullException(nameof(items));
-            var list = items as IList<UpsertItem> ?? new List<UpsertItem>(items);
+            var list = items as IList<UpsertItem> ?? [.. items];
             if (list.Count == 0) return;
+
+            options ??= new UpsertOptions();
 
             await using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -140,25 +210,70 @@ ON DUPLICATE KEY UPDATE
             foreach (var item in list)
             {
                 var collection = string.IsNullOrWhiteSpace(item.Collection) ? _defaultCollection : item.Collection;
-                float[] embedding = item.Embedding ?? Array.Empty<float>();
-                if (embedding.Length == 0)
+
+                if (options.UseChunking && (item.Embedding == null) && !string.IsNullOrEmpty(item.Content))
                 {
                     if (_embeddingGenerator == null)
-                        throw new InvalidOperationException("No embedding provided and no IEmbeddingGenerator configured.");
-                    embedding = await _embeddingGenerator.GenerateAsync(item.Content ?? string.Empty, cancellationToken).ConfigureAwait(false);
+                        throw new InvalidOperationException("Chunking requires an IEmbeddingGenerator to be configured.");
+
+                    var slicerOptions = BuildSlicerOptions(item.ContentType, options);
+                    var slicer = new Slicer(slicerOptions);
+                    var chunks = slicer.GetDocumentChunks(item.Content!, null, options.ChunkHeader ?? string.Empty);
+
+                    var chunkContents = new List<string>(chunks.Count);
+                    foreach (var c in chunks) chunkContents.Add(c.Content);
+                    var embeddings = await _embeddingGenerator.GenerateBatchAsync(chunkContents, cancellationToken).ConfigureAwait(false);
+                    if (embeddings.Count != chunks.Count)
+                        throw new InvalidOperationException("Embedding count did not match chunk count.");
+
+                    for (int i = 0; i < chunks.Count; i++)
+                    {
+                        var emb = embeddings[i];
+                        if (_embeddingDimension > 0 && emb.Length != _embeddingDimension)
+                            throw new InvalidOperationException($"Embedding dimension {emb.Length} does not match configured {_embeddingDimension}.");
+
+                        string embeddingText = VectorToText(emb);
+                        string chunkId = item.Id + "/c" + chunks[i].Index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        string? content = chunks[i].Content;
+
+                        var metaNode = item.Metadata is null
+                            ? new JsonObject()
+                            : JsonNode.Parse(item.Metadata.RootElement.GetRawText()) as JsonObject ?? new JsonObject();
+                        metaNode["parentId"] = item.Id;
+                        metaNode["chunkIndex"] = chunks[i].Index;
+                        metaNode["contentType"] = item.ContentType.ToString();
+                        string metadataJson = metaNode.ToJsonString();
+
+                        await using var cmd = new MySqlCommand(sql, conn, tx);
+                        cmd.Parameters.AddWithValue("@collection", collection);
+                        cmd.Parameters.AddWithValue("@id", chunkId);
+                        cmd.Parameters.AddWithValue("@content", (object?)content ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("@metadata", metadataJson);
+                        cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
+                        await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    }
                 }
-                if (_embeddingDimension > 0 && embedding.Length != _embeddingDimension)
-                    throw new InvalidOperationException($"Embedding dimension {embedding.Length} does not match configured {_embeddingDimension}.");
+                else
+                {
+                    float[] embedding = item.Embedding ?? [];
+                    if (embedding.Length == 0)
+                    {
+                        if (_embeddingGenerator == null)
+                            throw new InvalidOperationException("No embedding provided and no IEmbeddingGenerator configured.");
+                        embedding = await _embeddingGenerator.GenerateAsync(item.Content ?? string.Empty, cancellationToken).ConfigureAwait(false);
+                    }
+                    if (_embeddingDimension > 0 && embedding.Length != _embeddingDimension)
+                        throw new InvalidOperationException($"Embedding dimension {embedding.Length} does not match configured {_embeddingDimension}.");
 
-                string embeddingText = VectorToText(embedding);
-
-                await using var cmd = new MySqlCommand(sql, conn, tx);
-                cmd.Parameters.AddWithValue("@collection", collection);
-                cmd.Parameters.AddWithValue("@id", item.Id);
-                cmd.Parameters.AddWithValue("@content", (object?)item.Content ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@metadata", item.Metadata is null ? DBNull.Value : JsonSerializer.Serialize(item.Metadata));
-                cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
-                await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    string embeddingText = VectorToText(embedding);
+                    await using var cmd = new MySqlCommand(sql, conn, tx);
+                    cmd.Parameters.AddWithValue("@collection", collection);
+                    cmd.Parameters.AddWithValue("@id", item.Id);
+                    cmd.Parameters.AddWithValue("@content", (object?)item.Content ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("@metadata", item.Metadata is null ? DBNull.Value : JsonSerializer.Serialize(item.Metadata));
+                    cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
+                    await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
 
             await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -313,7 +428,7 @@ LIMIT @k";
             var hits = await SearchAsync(query, topK, null, cancellationToken).ConfigureAwait(false);
 
             var sb = new StringBuilder();
-            sb.AppendLine("You are a helpful assistant. Use the provided context to answer the user's question. If the answer isn't in the context, say you don't know. Keep answers concise. Cite source ids when relevant.");
+            sb.AppendLine("You are a helpful assistant. Use the provided context to answer the user's question. If the answer isn't in the context, say you don't know. Keep answers concise.");
             string system = sb.ToString();
 
             var contextBuilder = new StringBuilder();
@@ -404,14 +519,12 @@ LIMIT @k";
             {
                 const string existsSql = @"SELECT COUNT(1) FROM INFORMATION_SCHEMA.TIFLASH_INDEXES
 WHERE TIDB_DATABASE = DATABASE() AND TIDB_TABLE = 'tidb_vectors' AND INDEX_NAME = @indexName;";
-                await using (var existsCmd = new MySqlCommand(existsSql, conn))
+                await using var existsCmd = new MySqlCommand(existsSql, conn);
+                existsCmd.Parameters.AddWithValue("@indexName", indexName);
+                var countObj = await existsCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                if (countObj != null && Convert.ToInt64(countObj) > 0)
                 {
-                    existsCmd.Parameters.AddWithValue("@indexName", indexName);
-                    var countObj = await existsCmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-                    if (countObj != null && Convert.ToInt64(countObj) > 0)
-                    {
-                        return; // index already exists
-                    }
+                    return; // index already exists
                 }
             }
             catch (MySqlException)
@@ -435,6 +548,24 @@ WHERE TIDB_DATABASE = DATABASE() AND TIDB_TABLE = 'tidb_vectors' AND INDEX_NAME 
                 }
                 throw;
             }
+        }
+
+        private static SlicerOptions BuildSlicerOptions(ContentType contentType, UpsertOptions options)
+        {
+            var separators = contentType switch
+            {
+                ContentType.Markdown => Separators.Markdown,
+                ContentType.Html => Separators.Html,
+                _ => Separators.Text,
+            };
+
+            var slicerOptions = new SlicerOptions
+            {
+                MaxChunkTokenCount = Math.Max(100, options.MaxTokensPerChunk),
+                Separators = separators,
+                StripHtml = contentType == ContentType.Html && options.StripHtml
+            };
+            return slicerOptions;
         }
     }
 }
