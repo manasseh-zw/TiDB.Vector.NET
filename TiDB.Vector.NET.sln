@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiDB.Vector.Samples", "TiDB
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiDB.Vector.OpenAI", "TiDB.Vector.OpenAI\TiDB.Vector.OpenAI.csproj", "{33E148FB-964F-46E4-91C6-D0AA8A8DC85D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TiDB.Vector.AzureOpenAI", "TiDB.Vector.AzureOpenAI\TiDB.Vector.AzureOpenAI.csproj", "{2C99C318-8182-4B61-BF78-4E9B4275960E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{33E148FB-964F-46E4-91C6-D0AA8A8DC85D}.Release|x64.Build.0 = Release|Any CPU
 		{33E148FB-964F-46E4-91C6-D0AA8A8DC85D}.Release|x86.ActiveCfg = Release|Any CPU
 		{33E148FB-964F-46E4-91C6-D0AA8A8DC85D}.Release|x86.Build.0 = Release|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Debug|x64.Build.0 = Debug|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Debug|x86.Build.0 = Debug|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Release|x64.ActiveCfg = Release|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Release|x64.Build.0 = Release|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Release|x86.ActiveCfg = Release|Any CPU
+		{2C99C318-8182-4B61-BF78-4E9B4275960E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

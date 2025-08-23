@@ -13,18 +13,23 @@ namespace TiDB.Vector.Samples.Samples
 			await SearchCollectionAsync("docs_html", "What is ronaldos highest scoring game?");
 		}
 
-		private static async Task SearchCollectionAsync(string collection, string query)
-		{
-			var apiKey = AppConfig.OpenAIApiKey;
-			var connString = AppConfig.TiDBConnectionString;
+		        private static async Task SearchCollectionAsync(string collection, string query)
+        {
+            var config = new TiDB.Vector.OpenAI.OpenAIConfig
+            {
+                ApiKey = AppConfig.OpenAIApiKey,
+                Model = "text-embedding-3-small",
+                Dimension = 1536
+            };
+            var connString = AppConfig.TiDBConnectionString;
 
-			var store = new TiDBVectorStoreBuilder(connString)
-				.WithDefaultCollection(collection)
-				.WithDistanceFunction(DistanceFunction.Cosine)
-				.AddOpenAITextEmbedding(apiKey: apiKey, model: "text-embedding-3-small", dimension: 1536)
-				.AddOpenAIChatCompletion(apiKey: apiKey, model: "gpt-4.1")
-				.EnsureSchema(createVectorIndex: true)
-				.Build();
+            var store = new TiDBVectorStoreBuilder(connString)
+                .WithDefaultCollection(collection)
+                .WithDistanceFunction(DistanceFunction.Cosine)
+                .AddOpenAITextEmbedding(apiKey: config.ApiKey, model: config.Model, dimension: config.Dimension)
+                .AddOpenAIChatCompletion(apiKey: config.ApiKey, model: "gpt-4.1")
+                .EnsureSchema(createVectorIndex: true)
+                .Build();
 
 			var results = await store.SearchAsync(query, topK: 3);
 			Console.WriteLine($"Collection: {collection} - Top {results.Count} results for '{query}':");

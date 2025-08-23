@@ -17,6 +17,7 @@ Repository: [manasseh-zw/TiDB.Vector.NET](https://github.com/manasseh-zw/TiDB.Ve
 
 - `TiDB.Vector` (Core): store API, schema, SQL
 - `TiDB.Vector.OpenAI`: official OpenAI .NET SDK providers (embeddings/chat)
+- `TiDB.Vector.AzureOpenAI`: Azure OpenAI providers (embeddings/chat)
 - `TiDB.Vector.Samples`: runnable examples (upsert, search, ask)
 
 ### Requirements
@@ -37,8 +38,17 @@ cd TiDB.Vector.NET
 2) Create a `.env` file in `TiDB.Vector.Samples/`:
 
 ```
-OPENAI_API_KEY=sk-...
+# Required for all samples
 TIDB_CONN_STRING=Server=<host>;Port=4000;User ID=<user>;Password=<pwd>;Database=<db>;SslMode=VerifyFull;
+
+# For OpenAI samples
+OPENAI_API_KEY=sk-...
+
+# For Azure OpenAI samples
+AZURE_OPENAI_API_KEY=your-azure-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_EMBEDDING_DEPLOYMENT=your-embedding-deployment
+AZURE_OPENAI_CHAT_DEPLOYMENT=your-chat-deployment
 ```
 
 3) Run samples:
@@ -86,6 +96,28 @@ var results = await store.SearchAsync("a swimming animal", topK: 3);
 var answer = await store.AskAsync("Name an animal that swims.");
 ```
 
+#### Azure OpenAI Example
+
+```csharp
+using TiDB.Vector.Core;
+using TiDB.Vector.AzureOpenAI.Builder;
+
+var store = new TiDBVectorStoreBuilder(
+        Environment.GetEnvironmentVariable("TIDB_CONN_STRING")!)
+    .WithDefaultCollection("docs")
+    .WithDistanceFunction(DistanceFunction.Cosine)
+    .AddAzureOpenAITextEmbedding(
+        apiKey: Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!,
+        endpoint: Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,
+        deploymentName: Environment.GetEnvironmentVariable("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")!,
+        dimension: 1536)
+    .AddAzureOpenAIChatCompletion(
+        apiKey: Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!,
+        endpoint: Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,
+        deploymentName: Environment.GetEnvironmentVariable("AZURE_OPENAI_CHAT_DEPLOYMENT")!)
+    .EnsureSchema(createVectorIndex: true)
+    .Build();
+
 ### Default Schema and Index
 
 - Table: `tidb_vectors`
@@ -130,7 +162,8 @@ SslCa=C:\\path\\to\\isrgrootx1.pem;
 - Iteration 3: Vector index + TiFlash helpers
 - Iteration 4: Chunking (out-of-the-box text splitter)
 - Iteration 5: OpenAI embeddings/chat + RAG `AskAsync`
-- Iteration 6+: Filters, metrics, streaming, additional providers
+- Iteration 6: Azure OpenAI integration + additional providers
+- Iteration 7+: Filters, metrics, streaming, more providers
 
 ### Contributing
 

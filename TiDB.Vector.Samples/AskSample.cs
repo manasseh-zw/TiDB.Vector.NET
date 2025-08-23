@@ -8,14 +8,19 @@ namespace TiDB.Vector.Samples.Samples
 	{
 		public static async Task RunAsync()
 		{
-			var apiKey = AppConfig.OpenAIApiKey;
+			var config = new TiDB.Vector.OpenAI.OpenAIConfig
+			{
+				ApiKey = AppConfig.OpenAIApiKey,
+				Model = "text-embedding-3-small",
+				Dimension = 1536
+			};
 			var connString = AppConfig.TiDBConnectionString;
 
 			var store = new TiDBVectorStoreBuilder(connString)
 				.WithDefaultCollection("docs_txt")
 				.WithDistanceFunction(DistanceFunction.Cosine)
-				.AddOpenAITextEmbedding(apiKey: apiKey, model: "text-embedding-3-small", dimension: 1536)
-				.AddOpenAIChatCompletion(apiKey: apiKey, model: "gpt-4.1")
+				.AddOpenAITextEmbedding(apiKey: config.ApiKey, model: config.Model, dimension: config.Dimension)
+				.AddOpenAIChatCompletion(apiKey: config.ApiKey, model: "gpt-4.1")
 				.EnsureSchema(createVectorIndex: true)
 				.Build();
 
