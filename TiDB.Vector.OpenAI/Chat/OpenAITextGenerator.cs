@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenAI.Chat;
 using TiDB.Vector.Abstractions;
+using TiDB.Vector.OpenAI;
 
 namespace TiDB.Vector.OpenAI.Chat
 {
@@ -10,9 +11,10 @@ namespace TiDB.Vector.OpenAI.Chat
     {
         private readonly ChatClient _client;
 
-        public OpenAITextGenerator(string apiKey, string model)
+        public OpenAITextGenerator(OpenAIConfig config)
         {
-            _client = new ChatClient(model, apiKey);
+            config.Validate();
+            _client = new ChatClient(config.Model, config.ApiKey);
         }
 
         public async Task<string> CompleteAsync(

@@ -17,8 +17,8 @@ namespace TiDB.Vector.Samples.Samples
 			var store = new TiDBVectorStoreBuilder(connString)
 				.WithDefaultCollection("docs")
 				.WithDistanceFunction(DistanceFunction.Cosine)
-				.AddOpenAITextEmbedding(apiKey: apiKey, model: "text-embedding-3-small", dimension: 1536)
-				.AddOpenAIChatCompletion(apiKey: apiKey, model: "gpt-4.1")
+				.AddOpenAITextEmbedding(apiKey: apiKey, embeddingModel: "text-embedding-3-small", dimension: 1536)
+				.AddOpenAIChatCompletion(apiKey: apiKey, chatModel: "gpt-4.1")
 				.EnsureSchema(createVectorIndex: true)
 				.Build();
 

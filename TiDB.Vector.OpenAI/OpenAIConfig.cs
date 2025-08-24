@@ -2,6 +2,8 @@ namespace TiDB.Vector.OpenAI;
 
 public class OpenAIConfig
 {
+    internal ApiType ApiType { get; set; } = ApiType.Unknown;
+    
     public required string ApiKey { get; set; }
     public required string Model { get; set; }
     public int? Dimension { get; set; }
@@ -18,9 +20,17 @@ public class OpenAIConfig
             throw new Exception($"OpenAI: {nameof(Model)} is empty");
         }
 
-        if (Dimension.HasValue && Dimension.Value < 1)
+        // Only validate embedding dimension when using embeddings
+        if (ApiType == ApiType.Embedding && Dimension.HasValue && Dimension.Value < 1)
         {
             throw new Exception($"OpenAI: {nameof(Dimension)} must be at least 1");
         }
     }
+}
+
+internal enum ApiType
+{
+    Unknown = -1,
+    Embedding,
+    Chat,
 }

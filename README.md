@@ -45,10 +45,8 @@ TIDB_CONN_STRING=Server=<host>;Port=4000;User ID=<user>;Password=<pwd>;Database=
 OPENAI_API_KEY=sk-...
 
 # For Azure OpenAI samples
-AZURE_OPENAI_API_KEY=your-azure-key
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-AZURE_OPENAI_EMBEDDING_DEPLOYMENT=your-embedding-deployment
-AZURE_OPENAI_CHAT_DEPLOYMENT=your-chat-deployment
+AZURE_AI_APIKEY=your-azure-key
+AZURE_AI_ENDPOINT=https://your-resource.openai.azure.com/
 ```
 
 3) Run samples:
@@ -75,11 +73,11 @@ var store = new TiDBVectorStoreBuilder(
     .WithDistanceFunction(DistanceFunction.Cosine)
     .AddOpenAITextEmbedding(
         apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY")!,
-        model: "text-embedding-3-small",
+        embeddingModel: "text-embedding-3-small",
         dimension: 1536)
     .AddOpenAIChatCompletion(
         apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY")!,
-        model: "gpt-4o-mini")
+        chatModel: "gpt-4o-mini")
     .EnsureSchema(createVectorIndex: true)
     .Build();
 
@@ -107,14 +105,14 @@ var store = new TiDBVectorStoreBuilder(
     .WithDefaultCollection("docs")
     .WithDistanceFunction(DistanceFunction.Cosine)
     .AddAzureOpenAITextEmbedding(
-        apiKey: Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!,
-        endpoint: Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,
-        deploymentName: Environment.GetEnvironmentVariable("AZURE_OPENAI_EMBEDDING_DEPLOYMENT")!,
+        apiKey: Environment.GetEnvironmentVariable("AZURE_AI_APIKEY")!,
+        endpoint: Environment.GetEnvironmentVariable("AZURE_AI_ENDPOINT")!,
+        embeddingModel: "your-embedding-deployment",
         dimension: 1536)
     .AddAzureOpenAIChatCompletion(
-        apiKey: Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!,
-        endpoint: Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,
-        deploymentName: Environment.GetEnvironmentVariable("AZURE_OPENAI_CHAT_DEPLOYMENT")!)
+        apiKey: Environment.GetEnvironmentVariable("AZURE_AI_APIKEY")!,
+        endpoint: Environment.GetEnvironmentVariable("AZURE_AI_ENDPOINT")!,
+        chatModel: "your-chat-deployment")
     .EnsureSchema(createVectorIndex: true)
     .Build();
 

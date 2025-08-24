@@ -1,8 +1,8 @@
 using System;
 using TiDB.Vector.Abstractions;
-using TiDB.Vector.Core;
 using TiDB.Vector.AzureOpenAI.Chat;
 using TiDB.Vector.AzureOpenAI.Embedding;
+using TiDB.Vector.Core;
 
 namespace TiDB.Vector.AzureOpenAI.Builder
 {
@@ -12,20 +12,23 @@ namespace TiDB.Vector.AzureOpenAI.Builder
             this TiDBVectorStoreBuilder builder,
             string apiKey,
             string endpoint,
-            string deploymentName,
-            int dimension)
+            string embeddingModel,
+            int dimension
+        )
         {
-            if (builder is null) throw new ArgumentNullException(nameof(builder));
-            
+            if (builder is null)
+                throw new ArgumentNullException(nameof(builder));
+
             var config = new AzureOpenAIConfig
             {
+                ApiType = ApiType.Embedding,
                 Auth = AuthType.APIKey,
                 ApiKey = apiKey,
                 Endpoint = endpoint,
-                DeploymentName = deploymentName,
-                EmbeddingDimension = dimension
+                DeploymentName = embeddingModel,
+                EmbeddingDimension = dimension,
             };
-            
+
             IEmbeddingGenerator generator = new AzureOpenAIEmbeddingGenerator(config);
             return builder.UseEmbeddingGenerator(generator);
         }
@@ -34,18 +37,21 @@ namespace TiDB.Vector.AzureOpenAI.Builder
             this TiDBVectorStoreBuilder builder,
             string apiKey,
             string endpoint,
-            string deploymentName)
+            string chatModel
+        )
         {
-            if (builder is null) throw new ArgumentNullException(nameof(builder));
-            
+            if (builder is null)
+                throw new ArgumentNullException(nameof(builder));
+
             var config = new AzureOpenAIConfig
             {
+                ApiType = ApiType.Chat,
                 Auth = AuthType.APIKey,
                 ApiKey = apiKey,
                 Endpoint = endpoint,
-                DeploymentName = deploymentName
+                DeploymentName = chatModel,
             };
-            
+
             ITextGenerator generator = new AzureOpenAITextGenerator(config);
             return builder.UseTextGenerator(generator);
         }

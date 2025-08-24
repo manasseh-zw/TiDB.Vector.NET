@@ -1,5 +1,6 @@
 using OpenAI.Embeddings;
 using TiDB.Vector.Abstractions;
+using TiDB.Vector.OpenAI;
 
 namespace TiDB.Vector.OpenAI.Embedding
 {
@@ -8,14 +9,18 @@ namespace TiDB.Vector.OpenAI.Embedding
         private readonly EmbeddingClient _client;
         public int Dimension { get; }
 
-        public OpenAIEmbeddingGenerator(string apiKey, string model, int dimension)
+        public OpenAIEmbeddingGenerator(OpenAIConfig config)
         {
-            if (string.IsNullOrWhiteSpace(apiKey))
-                throw new ArgumentNullException(nameof(apiKey));
-            if (string.IsNullOrWhiteSpace(model))
-                throw new ArgumentNullException(nameof(model));
-            _client = new EmbeddingClient(model, apiKey);
-            Dimension = dimension;
+            config.Validate();
+            if (string.IsNullOrWhiteSpace(config.ApiKey))
+                throw new ArgumentNullException(nameof(config.ApiKey));
+            if (string.IsNullOrWhiteSpace(config.Model))
+                throw new ArgumentNullException(nameof(config.Model));
+            if (!config.Dimension.HasValue)
+                throw new ArgumentException("Dimension must be specified for embedding generation", nameof(config.Dimension));
+                
+            _client = new EmbeddingClient(config.Model, config.ApiKey);
+            Dimension = config.Dimension.Value;
         }
 
         public async Task<float[]> GenerateAsync(

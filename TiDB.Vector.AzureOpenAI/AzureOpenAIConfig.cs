@@ -2,15 +2,13 @@ namespace TiDB.Vector.AzureOpenAI;
 
 public class AzureOpenAIConfig
 {
+    internal ApiType ApiType { get; set; } = ApiType.Unknown;
+    
     public AuthType Auth { get; set; } = AuthType.Unknown;
-
     public required string ApiKey { get; set; }
-
     public required string Endpoint { get; set; }
-
     public required string DeploymentName { get; set; }
-
-    public int EmbeddingDimension;
+    public int EmbeddingDimension { get; set; }
 
     public void Validate()
     {
@@ -42,7 +40,9 @@ public class AzureOpenAIConfig
                 $"Azure OpenAI: {nameof(DeploymentName)} (deployment name) is empty"
             );
         }
-        if (EmbeddingDimension is < 1)
+        
+        // Only validate embedding dimension when using embeddings
+        if (ApiType == ApiType.Embedding && EmbeddingDimension is < 1)
         {
             throw new Exception($"Azure OpenAI: {nameof(EmbeddingDimension)} must be at least 1");
         }
@@ -53,4 +53,11 @@ public enum AuthType
 {
     Unknown = -1,
     APIKey,
+}
+
+internal enum ApiType
+{
+    Unknown = -1,
+    Embedding,
+    Chat,
 }
