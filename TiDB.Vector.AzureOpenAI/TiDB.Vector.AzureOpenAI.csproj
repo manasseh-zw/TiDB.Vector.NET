@@ -1,18 +1,34 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>TiDB.Vector.AzureOpenAI</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>manasseh-zw</Authors>
+    <Company>TiDB.Vector.NET</Company>
+    <Description>Azure OpenAI integration for TiDB.Vector. Provides Azure OpenAI embeddings and chat completion capabilities. Requires TiDB.Vector core package.</Description>
+    <PackageTags>tidb;vector;azure;openai;embeddings;chat;ai;machine-learning</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/manasseh-zw/TiDB.Vector.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/manasseh-zw/TiDB.Vector.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
-    <ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\TiDB.Vector\TiDB.Vector.csproj" />
   </ItemGroup>
 
-    <ItemGroup>
-      <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
-      <PackageReference Include="Azure.Identity" Version="1.15.0" />
-    </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="Azure.Identity" Version="1.15.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
 </Project>

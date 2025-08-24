@@ -1,8 +1,8 @@
 using System.Text.Json;
 using TiDB.Vector.Core;
 using TiDB.Vector.Models;
-using TiDB.Vector.OpenAI.Builder;
 using TiDB.Vector.Options;
+using TiDB.Vector.OpenAI.Builder;
 
 namespace TiDB.Vector.Samples.Samples
 {
@@ -16,12 +16,9 @@ namespace TiDB.Vector.Samples.Samples
             var store = new TiDBVectorStoreBuilder(connString)
                 .WithDefaultCollection("docs")
                 .WithDistanceFunction(DistanceFunction.Cosine)
-                .AddOpenAITextEmbedding(
-                    apiKey: apiKey,
-                    embeddingModel: "text-embedding-3-small",
-                    dimension: 1536
-                )
-                .AddOpenAIChatCompletion(apiKey: apiKey, chatModel: "gpt-4.1")
+                .AddOpenAI(apiKey)
+                .AddOpenAITextEmbedding("text-embedding-3-small", 1536)
+                .AddOpenAIChatCompletion("gpt-4.1")
                 .EnsureSchema(createVectorIndex: true)
                 .Build();
 

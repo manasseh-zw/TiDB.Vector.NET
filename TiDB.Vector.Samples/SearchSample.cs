@@ -19,15 +19,9 @@ namespace TiDB.Vector.Samples.Samples
             var store = new TiDBVectorStoreBuilder(connString)
                 .WithDefaultCollection(collection)
                 .WithDistanceFunction(DistanceFunction.Cosine)
-                .AddOpenAITextEmbedding(
-                    apiKey: AppConfig.OpenAIApiKey,
-                    embeddingModel: AppConfig.EmbeddingModel,
-                    dimension: 1536
-                )
-                .AddOpenAIChatCompletion(
-                    apiKey: AppConfig.OpenAIApiKey,
-                    chatModel: AppConfig.CompletionModel
-                )
+                .AddOpenAI(AppConfig.OpenAIApiKey)
+                .AddOpenAITextEmbedding(AppConfig.EmbeddingModel, 1536)
+                .AddOpenAIChatCompletion(AppConfig.CompletionModel)
                 .EnsureSchema(createVectorIndex: true)
                 .Build();
 

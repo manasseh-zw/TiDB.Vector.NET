@@ -9,14 +9,20 @@ Repository: [manasseh-zw/TiDB.Vector.NET](https://github.com/manasseh-zw/TiDB.Ve
 - Fluent builder to wire connection, embeddings, and chat
 - Default schema with fixed-dimension `VECTOR(D)` and optional HNSW index
 - Safe, parameterized SQL via `MySqlConnector`
-- OpenAI providers in a separate package (`TiDB.Vector.OpenAI`)
+- OpenAI providers built into the core package
 - Simple RAG helper (`AskAsync`) that cites sources
 - Samples with `.env` support via `dotenv.net`
+
+### NuGet Packages
+
+- **`TiDB.Vector`** - Core package with vector store functionality
+
+- **`TiDB.Vector.AzureOpenAI`** - Azure OpenAI integration (embeddings + chat)
 
 ### Projects
 
 - `TiDB.Vector` (Core): store API, schema, SQL
-- `TiDB.Vector.OpenAI`: official OpenAI .NET SDK providers (embeddings/chat)
+
 - `TiDB.Vector.AzureOpenAI`: Azure OpenAI providers (embeddings/chat)
 - `TiDB.Vector.Samples`: runnable examples (upsert, search, ask)
 
@@ -25,6 +31,25 @@ Repository: [manasseh-zw/TiDB.Vector.NET](https://github.com/manasseh-zw/TiDB.Ve
 - .NET 8.0+
 - TiDB v8.4+ (v8.5+ recommended); TiDB Cloud supported
 - For HNSW index: TiFlash replica required on the target table
+
+### Installation
+
+```bash
+# Core package with OpenAI built-in (recommended)
+dotnet add package TiDB.Vector
+
+# Azure OpenAI integration (optional, extends core)
+dotnet add package TiDB.Vector.AzureOpenAI
+```
+
+### What You Get With Each Package
+
+| Package | Vector Store | Embeddings | Chat/RAG | Notes |
+|---------|--------------|------------|----------|-------|
+| `TiDB.Vector` | ✅ | ✅ | ✅ | **Full functionality with OpenAI built-in** |
+| `TiDB.Vector` + `TiDB.Vector.AzureOpenAI` | ✅ | ✅ | ✅ | Full functionality + Azure OpenAI support |
+
+**Note**: The core package now provides everything you need! Azure OpenAI is an optional extension for Azure-specific features.
 
 ### Quickstart (local dev)
 
@@ -63,23 +88,44 @@ The sample will:
 
 ### Core API (glance)
 
+#### **New Clean API (Recommended)**
+
 ```csharp
 using TiDB.Vector.Core;
-using TiDB.Vector.OpenAI.Builder;
+using TiDB.Vector.OpenAI.Builder; // Built into TiDB.Vector core package
 
 var store = new TiDBVectorStoreBuilder(
         Environment.GetEnvironmentVariable("TIDB_CONN_STRING")!)
     .WithDefaultCollection("docs")
     .WithDistanceFunction(DistanceFunction.Cosine)
-    .AddOpenAITextEmbedding(
-        apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY")!,
-        embeddingModel: "text-embedding-3-small",
-        dimension: 1536)
-    .AddOpenAIChatCompletion(
-        apiKey: Environment.GetEnvironmentVariable("OPENAI_API_KEY")!,
-        chatModel: "gpt-4o-mini")
+    .AddOpenAI(Environment.GetEnvironmentVariable("OPENAI_API_KEY")!)
+    .AddOpenAITextEmbedding("text-embedding-3-small", 1536)
+    .AddOpenAIChatCompletion("gpt-4o-mini")
     .EnsureSchema(createVectorIndex: true)
     .Build();
+```
+
+#### **Custom Endpoints (OpenAI-Compatible Services)**
+
+```csharp
+var store = new TiDBVectorStoreBuilder(connectionString)
+    .AddOpenAI("your-api-key", "https://your-local-model.com/v1")
+    .AddOpenAITextEmbedding("your-embedding-model", 1536)
+    .AddOpenAIChatCompletion("your-chat-model")
+    .Build();
+```
+
+#### **Azure OpenAI Integration**
+
+```csharp
+var store = new TiDBVectorStoreBuilder(connectionString)
+    .AddAzureOpenAI("your-azure-key", "https://your-resource.openai.azure.com/")
+    .AddAzureOpenAITextEmbedding("your-embedding-deployment", 1536)
+    .AddAzureOpenAIChatCompletion("your-chat-deployment")
+    .Build();
+```
+
+
 
 await store.EnsureSchemaAsync();
 
@@ -104,15 +150,11 @@ var store = new TiDBVectorStoreBuilder(
         Environment.GetEnvironmentVariable("TIDB_CONN_STRING")!)
     .WithDefaultCollection("docs")
     .WithDistanceFunction(DistanceFunction.Cosine)
-    .AddAzureOpenAITextEmbedding(
-        apiKey: Environment.GetEnvironmentVariable("AZURE_AI_APIKEY")!,
-        endpoint: Environment.GetEnvironmentVariable("AZURE_AI_ENDPOINT")!,
-        embeddingModel: "your-embedding-deployment",
-        dimension: 1536)
-    .AddAzureOpenAIChatCompletion(
-        apiKey: Environment.GetEnvironmentVariable("AZURE_AI_APIKEY")!,
-        endpoint: Environment.GetEnvironmentVariable("AZURE_AI_ENDPOINT")!,
-        chatModel: "your-chat-deployment")
+    .AddAzureOpenAI(
+        Environment.GetEnvironmentVariable("AZURE_AI_APIKEY")!,
+        Environment.GetEnvironmentVariable("AZURE_AI_ENDPOINT")!)
+    .AddAzureOpenAITextEmbedding("your-embedding-deployment", 1536)
+    .AddAzureOpenAIChatCompletion("your-chat-deployment")
     .EnsureSchema(createVectorIndex: true)
     .Build();
 
@@ -133,7 +175,7 @@ Notes:
 
 ### OpenAI integration
 
-Provided via `TiDB.Vector.OpenAI` using the official OpenAI .NET SDK 2.x:
+Built into the core package using the official OpenAI .NET SDK 2.x:
 - Embeddings: `EmbeddingClient` (`text-embedding-3-small` 1536 dims, `text-embedding-3-large` 3072 dims)
 - Chat: `ChatClient` (e.g., `gpt-4o-mini`)
 
@@ -153,15 +195,49 @@ If you must provide a custom CA bundle, append:
 SslCa=C:\\path\\to\\isrgrootx1.pem;
 ```
 
+### Current Architecture
+
+The project now has OpenAI integration built into the core package:
+
+- **`TiDB.Vector`** - Core vector store functionality + **OpenAI integration built-in**
+- **`TiDB.Vector.AzureOpenAI`** - Azure OpenAI integration (extends core capabilities)
+
+**Note**: Users now get full AI functionality with just the core package! Azure OpenAI is available as an optional extension.
+
+### Future Development Plans
+
+We're planning to restructure the architecture for better user experience:
+
+#### **Phase 1: OpenAI Built-In ✅ COMPLETED**
+- **`TiDB.Vector`** - Core + OpenAI integration built-in by default
+- Users get AI capabilities out of the box with one package
+- **OpenAI-compatible endpoint support** for local models and other providers
+- Provider abstraction layer for easy integration with OpenAI-compatible services
+
+#### **Phase 2: Provider Extensions**
+- **`TiDB.Vector.AzureOpenAI`** - Azure-specific optimizations
+- **`TiDB.Vector.GoogleGemini`** - Google Gemini integration
+- **`TiDB.Vector.Anthropic`** - Anthropic Claude integration
+- **`TiDB.Vector.Custom`** - Template for custom provider implementations
+
+#### **Benefits of New Architecture**
+- ✅ **One package = full functionality**
+- ✅ **AI works immediately** without additional packages
+- ✅ **Easy provider switching** via configuration
+- ✅ **Future-proof** with clean extension points
+- ✅ **Better developer experience**
+
 ### Roadmap (high level)
 
-- Iteration 1: Skeleton and builder
-- Iteration 2: Schema management + upsert/search
-- Iteration 3: Vector index + TiFlash helpers
-- Iteration 4: Chunking (out-of-the-box text splitter)
-- Iteration 5: OpenAI embeddings/chat + RAG `AskAsync`
-- Iteration 6: Azure OpenAI integration + additional providers
-- Iteration 7+: Filters, metrics, streaming, more providers
+- Iteration 1: Skeleton and builder ✅
+- Iteration 2: Schema management + upsert/search ✅
+- Iteration 3: Vector index + TiFlash helpers ✅
+- Iteration 4: Chunking (out-of-the-box text splitter) ✅
+- Iteration 5: OpenAI embeddings/chat + RAG `AskAsync` ✅
+- Iteration 6: Azure OpenAI integration + additional providers ✅
+- **Iteration 7**: OpenAI built into core + provider abstraction layer ✅ **COMPLETED**
+- **Iteration 8**: Additional provider extensions (Gemini, Claude, etc.)
+- **Iteration 9+**: Advanced features (filters, metrics, streaming, hybrid search)
 
 ### Contributing
 

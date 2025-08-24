@@ -4,11 +4,28 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>TiDB.Vector</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>manasseh-zw</Authors>
+    <Company>TiDB.Vector.NET</Company>
+    <Description>Core C# SDK for TiDB Vector Search with OpenAI integration built-in. Features fluent builder API, vector upsert/search, RAG capabilities, and optional chunking. Supports both OpenAI and OpenAI-compatible endpoints.</Description>
+    <PackageTags>tidb;vector;search;openai;rag;embeddings;ai;machine-learning</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/manasseh-zw/TiDB.Vector.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/manasseh-zw/TiDB.Vector.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="drittich.SemanticSlicer" Version="1.4.2" />
     <PackageReference Include="MySqlConnector" Version="2.4.0" />
+    <PackageReference Include="OpenAI" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>

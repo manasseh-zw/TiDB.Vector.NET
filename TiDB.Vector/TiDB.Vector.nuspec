@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/nuspec.xsd">
+  <metadata>
+    <id>TiDB.Vector</id>
+    <version>1.0.0</version>
+    <title>TiDB.Vector</title>
+    <authors>manasseh-zw</authors>
+    <owners>manasseh-zw</owners>
+    <projectUrl>https://github.com/manasseh-zw/TiDB.Vector.NET</projectUrl>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://github.com/manasseh-zw/TiDB.Vector.NET/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Core C# SDK for TiDB Vector Search. Features fluent builder API, vector upsert/search, RAG capabilities, and optional chunking. Add TiDB.Vector.OpenAI or TiDB.Vector.AzureOpenAI for AI integration.</description>
+    <releaseNotes>Initial release with core vector store functionality, schema management, and RAG capabilities.</releaseNotes>
+    <copyright>Copyright 2024</copyright>
+    <tags>tidb vector search rag embeddings machine-learning ai</tags>
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="drittich.SemanticSlicer" version="1.4.2" />
+        <dependency id="MySqlConnector" version="2.4.0" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="bin\Release\net8.0\TiDB.Vector.dll" target="lib\net8.0\" />
+    <file src="bin\Release\net8.0\TiDB.Vector.pdb" target="lib\net8.0\" />
+    <file src="..\README.md" target="" />
+  </files>
+</package>

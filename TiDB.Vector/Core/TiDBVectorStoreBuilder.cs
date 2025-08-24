@@ -14,6 +14,14 @@ namespace TiDB.Vector.Core
         private bool _ensureSchema;
         private bool _createVectorIndex;
 
+        // OpenAI configuration
+        private string? _openAIApiKey;
+        private string? _openAIEndpoint;
+
+        // Azure OpenAI configuration
+        private string? _azureOpenAIApiKey;
+        private string? _azureOpenAIEndpoint;
+
         public TiDBVectorStoreBuilder(string connectionString)
         {
             _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
@@ -44,26 +52,6 @@ namespace TiDB.Vector.Core
             return this;
         }
 
-        // Convenience fluent methods for OpenAI that we will flesh out in later iterations
-        public TiDBVectorStoreBuilder AddOpenAI(string apiKey)
-        {
-            _ = apiKey; // placeholder for now
-            return this;
-        }
-
-        public TiDBVectorStoreBuilder AddOpenAITextEmbedding(string model, int dimension)
-        {
-            _ = model; // placeholder
-            _embeddingDimension = dimension;
-            return this;
-        }
-
-        public TiDBVectorStoreBuilder AddOpenAIChatCompletion(string model)
-        {
-            _ = model; // placeholder
-            return this;
-        }
-
         public TiDBVectorStoreBuilder EnsureSchema(bool createVectorIndex)
         {
             _ensureSchema = true;
@@ -82,6 +70,24 @@ namespace TiDB.Vector.Core
                 _textGenerator,
                 _ensureSchema,
                 _createVectorIndex);
+        }
+
+        // OpenAI configuration methods
+        internal string? GetOpenAIApiKey() => _openAIApiKey;
+        internal string? GetOpenAIEndpoint() => _openAIEndpoint;
+        internal void SetOpenAIConfig(string apiKey, string? endpoint = null)
+        {
+            _openAIApiKey = apiKey;
+            _openAIEndpoint = endpoint;
+        }
+
+        // Azure OpenAI configuration methods
+        public string? GetAzureOpenAIApiKey() => _azureOpenAIApiKey;
+        public string? GetAzureOpenAIEndpoint() => _azureOpenAIEndpoint;
+        public void SetAzureOpenAIConfig(string apiKey, string endpoint)
+        {
+            _azureOpenAIApiKey = apiKey;
+            _azureOpenAIEndpoint = endpoint;
         }
     }
 }

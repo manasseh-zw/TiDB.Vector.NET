@@ -19,12 +19,8 @@ namespace TiDB.Vector.Samples.Samples
             var store = new TiDBVectorStoreBuilder(AppConfig.TiDBConnectionString)
                 .WithDefaultCollection(collection)
                 .WithDistanceFunction(DistanceFunction.Cosine)
-                .AddAzureOpenAITextEmbedding(
-                    apiKey: AppConfig.AzureOpenAIApiKey,
-                    endpoint: AppConfig.AzureOpenAIEndpoint,
-                    embeddingModel: AppConfig.EmbeddingModel,
-                    dimension: 1536
-                )
+                .AddAzureOpenAI(AppConfig.AzureOpenAIApiKey, AppConfig.AzureOpenAIEndpoint)
+                .AddAzureOpenAITextEmbedding(AppConfig.EmbeddingModel, 1536)
                 .EnsureSchema(createVectorIndex: true)
                 .Build();
 
@@ -44,17 +40,9 @@ namespace TiDB.Vector.Samples.Samples
             var store = new TiDBVectorStoreBuilder(AppConfig.TiDBConnectionString)
                 .WithDefaultCollection("docs_html")
                 .WithDistanceFunction(DistanceFunction.Cosine)
-                .AddAzureOpenAITextEmbedding(
-                    apiKey: AppConfig.AzureOpenAIApiKey,
-                    endpoint: AppConfig.AzureOpenAIEndpoint,
-                    embeddingModel: AppConfig.EmbeddingModel,
-                    dimension: 1536
-                )
-                .AddAzureOpenAIChatCompletion(
-                    apiKey: AppConfig.AzureOpenAIApiKey,
-                    endpoint: AppConfig.AzureOpenAIEndpoint,
-                    chatModel: AppConfig.CompletionModel
-                )
+                .AddAzureOpenAI(AppConfig.AzureOpenAIApiKey, AppConfig.AzureOpenAIEndpoint)
+                .AddAzureOpenAITextEmbedding(AppConfig.EmbeddingModel, 1536)
+                .AddAzureOpenAIChatCompletion(AppConfig.CompletionModel)
                 .EnsureSchema(createVectorIndex: true)
                 .Build();
 

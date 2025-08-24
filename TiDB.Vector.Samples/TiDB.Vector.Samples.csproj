@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -13,7 +13,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TiDB.Vector\TiDB.Vector.csproj" />
-    <ProjectReference Include="..\TiDB.Vector.OpenAI\TiDB.Vector.OpenAI.csproj" />
     <ProjectReference Include="..\TiDB.Vector.AzureOpenAI\TiDB.Vector.AzureOpenAI.csproj" />
   </ItemGroup>
 
