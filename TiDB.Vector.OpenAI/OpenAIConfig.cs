@@ -3,7 +3,7 @@ namespace TiDB.Vector.OpenAI;
 public class OpenAIConfig
 {
     internal ApiType ApiType { get; set; } = ApiType.Unknown;
-    
+
     public required string ApiKey { get; set; }
     public required string Model { get; set; }
     public int? Dimension { get; set; }

@@ -11,7 +11,7 @@ namespace TiDB.Vector.Samples
         private static string? _azureOpenAIEndpoint;
 
         public static string EmbeddingModel = "text-embedding-3-small";
-        public static string CompletionModel = "gpt4.1";
+        public static string CompletionModel = "gpt-4.1";
 
         public static void Load()
         {
@@ -56,7 +56,7 @@ namespace TiDB.Vector.Samples
                 Load();
                 return _azureOpenAIApiKey
                     ?? throw new InvalidOperationException(
-                        "AZURE_OPENAI_API_KEY not found in environment/.env"
+                        "AZURE_AI_APIKEY not found in environment/.env"
                     );
             }
         }
@@ -68,7 +68,7 @@ namespace TiDB.Vector.Samples
                 Load();
                 return _azureOpenAIEndpoint
                     ?? throw new InvalidOperationException(
-                        "AZURE_OPENAI_ENDPOINT not found in environment/.env"
+                        "AZURE_AI_ENDPOINT not found in environment/.env"
                     );
             }
         }
