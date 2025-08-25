@@ -1,0 +1,24 @@
+# Tell GitHub this is primarily a C# repository
+*.cs linguist-language=C#
+*.csproj linguist-language=C#
+*.sln linguist-language=C#
+
+# Markdown files are documentation
+*.md linguist-documentation
+*.md linguist-vendored
+
+# JSON files are configuration
+*.json linguist-vendored
+launch.json linguist-vendored
+tasks.json linguist-vendored
+
+# HTML file is sample content
+*.html linguist-vendored
+
+# Text files are sample content
+*.txt linguist-vendored
+
+# Force C# as the main language
+*.cs linguist-detectable=true
+*.csproj linguist-detectable=true
+*.sln linguist-detectable=true
