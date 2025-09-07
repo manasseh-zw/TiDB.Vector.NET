@@ -106,6 +106,7 @@ ON vectors ((VEC_L2_DISTANCE(embedding))) USING HNSW;
 ```
 
 Notes
+
 - Index requires fixed dimension `VECTOR(D)`. `D` is derived from the configured embedding generator.
 - For filtered queries, we perform KNN first, then apply filters to preserve ANN index usage.
 
@@ -213,41 +214,48 @@ public sealed record Citation
 
 ### Iterations and Deliverables
 
-1) Skeleton and Builder
+1. Skeleton and Builder
+
    - Abstractions, models, builder, empty `TiDBVectorStore`.
    - Samples compile and run (no-op logic returning placeholders).
 
-2) Schema Management + Basic Upsert/Search
+2. Schema Management + Basic Upsert/Search
+
    - `EnsureSchemaAsync()` creates table with `VECTOR(D)`.
    - `UpsertAsync/BatchAsync` with embedding generation if missing.
    - `SearchAsync` KNN (no filters).
    - Sample: connect, ensure schema, upsert few docs, search.
 
-3) Vector Index (HNSW)
+3. Vector Index (HNSW)
+
    - Create index for Cosine/L2 per configuration.
    - Helpers to `EXPLAIN` and report whether ANN index is used.
    - Docs on pre-filter limitation and subquery pattern.
 
-4) Chunking Support
+4. Chunking Support
+
    - Integrate SemanticSlicer; store chunk rows (optional `parent_id`, offsets).
    - `UseChunking` in upsert; retrieval returns chunk-level results.
 
-5) Ask (RAG)
+5. Ask (RAG)
+
    - Retrieve top-k chunks; assemble prompt with citations; call `ITextGenerator`.
    - Return `Answer` with `Sources`; optional streaming later.
 
-6) DX Polish
+6. DX Polish
+
    - Filter support, collections, metadata predicates (post-filter pattern built-in).
    - Concurrency controls, batching, rate-limits, retries.
    - Logging hooks (ILogger), diagnostics IDs.
    - README quickstart and API docs.
 
-7) Performance
+7. Performance
+
    - Prepared statements, batch insert optimizations.
    - Parallel embedding with backpressure.
    - Optional forced compaction helper (`ALTER TABLE ... COMPACT`).
 
-8) Tests
+8. Tests
    - Unit tests for SQL builders and serialization.
    - Integration tests gated by env variables; optional Docker/TiDB.
 
@@ -268,9 +276,51 @@ public sealed record Citation
 - No secrets in code; accept API keys via environment or builder.
 - Optional TLS params passed via connection string.
 
+### Completed Advanced Features ✅
+
+**Iteration 8: Advanced Filtering and Source Tracking (COMPLETED)**
+
+- **Collection Filtering**: Filter by single collection for simplified, predictable results
+- **Tag-based Filtering**: Key-value filtering using dedicated JSON tags column
+- **Source Tracking**: Track document origins (URLs, file paths, etc.) in dedicated column
+- **Dedicated Tags Column**: Efficient JSON-based filtering without parsing metadata
+- **Multi-tenant Support**: Organization/department filtering for SaaS applications
+- **Performance Optimized**: Leverages TiDB's binary JSON serialization for quick access
+- **Index-friendly**: Maintains vector index usage during filtered searches
+
+**API Examples:**
+
+```csharp
+// Collection filtering
+var results = await store.SearchAsync("query",
+    searchOptions: new SearchOptions { Collection = "engineering-docs" });
+
+// Tag filtering
+var results = await store.SearchAsync("query",
+    searchOptions: new SearchOptions
+    {
+        TagFilters = new Dictionary<string, string>
+        {
+            ["OrganizationId"] = "org-123",
+            ["Department"] = "Engineering"
+        }
+    });
+
+// Combined filtering
+var results = await store.SearchAsync("query",
+    searchOptions: new SearchOptions
+    {
+        Collection = "engineering-docs",
+        TagFilters = new Dictionary<string, string>
+        {
+            ["OrganizationId"] = "org-123"
+        }
+    });
+```
+
 ### Future Extensions
 
-- Additional embedding providers (Azure OpenAI, Text Embeddings Inference, HuggingFace Inference API).
+- Additional embedding providers (Google Gemini, Anthropic Claude, Text Embeddings Inference, HuggingFace Inference API).
 - Multi-table collections; per-collection distance function and dimension.
 - Hybrid search (BM25 + vector) and reranking.
 - Streaming answers and function/tool calling.
@@ -280,5 +330,3 @@ public sealed record Citation
 - Uses `VECTOR(D)` and vector distance functions: `VEC_COSINE_DISTANCE`, `VEC_L2_DISTANCE`.
 - HNSW vector index via `CREATE VECTOR INDEX ... USING HNSW`.
 - Honors index restrictions: single vector column, fixed dimension, ASC order, matching distance function.
-
-

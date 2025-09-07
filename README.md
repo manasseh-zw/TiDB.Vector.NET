@@ -7,10 +7,12 @@ Repository: [manasseh-zw/TiDB.Vector.NET](https://github.com/manasseh-zw/TiDB.Ve
 ### Features
 
 - Fluent builder to wire connection, embeddings, and chat
-- Default schema with fixed-dimension `VECTOR(D)` and optional HNSW index
+- Default schema with dedicated tags JSON column for efficient filtering
 - Safe, parameterized SQL via `MySqlConnector`
 - OpenAI providers built into the core package
 - Simple RAG helper (`AskAsync`) that cites sources
+- **Advanced filtering**: Collection filtering and key-value tag filtering
+- **Source tracking**: Track document sources (URLs, file paths, etc.)
 - Samples with `.env` support via `dotenv.net`
 
 ### NuGet Packages
@@ -44,23 +46,23 @@ dotnet add package TiDB.Vector.AzureOpenAI
 
 ### What You Get With Each Package
 
-| Package | Vector Store | Embeddings | Chat/RAG | Notes |
-|---------|--------------|------------|----------|-------|
-| `TiDB.Vector` | ✅ | ✅ | ✅ | **Full functionality with OpenAI built-in** |
-| `TiDB.Vector` + `TiDB.Vector.AzureOpenAI` | ✅ | ✅ | ✅ | Full functionality + Azure OpenAI support |
+| Package                                   | Vector Store | Embeddings | Chat/RAG | Notes                                       |
+| ----------------------------------------- | ------------ | ---------- | -------- | ------------------------------------------- |
+| `TiDB.Vector`                             | ✅           | ✅         | ✅       | **Full functionality with OpenAI built-in** |
+| `TiDB.Vector` + `TiDB.Vector.AzureOpenAI` | ✅           | ✅         | ✅       | Full functionality + Azure OpenAI support   |
 
 **Note**: The core package now provides everything you need! Azure OpenAI is an optional extension for Azure-specific features.
 
 ### Quickstart (local dev)
 
-1) Clone the repo:
+1. Clone the repo:
 
 ```bash
 git clone https://github.com/manasseh-zw/TiDB.Vector.NET
 cd TiDB.Vector.NET
 ```
 
-2) Create a `.env` file in `TiDB.Vector.Samples/`:
+2. Create a `.env` file in `TiDB.Vector.Samples/`:
 
 ```
 # Required for all samples
@@ -74,17 +76,26 @@ AZURE_AI_APIKEY=your-azure-key
 AZURE_AI_ENDPOINT=https://your-resource.openai.azure.com/
 ```
 
-3) Run samples:
+3. Run samples:
 
 ```bash
 dotnet run --project TiDB.Vector.Samples
 ```
 
-The sample will:
+The samples include:
+
+- **FilteringSample**: Demonstrates collection filtering and tag-based filtering
+- **SearchSample**: Basic vector search functionality
+- **AskSample**: RAG (Retrieval-Augmented Generation) with source citations
+- **UpsertSample**: Document ingestion with chunking
+- **AzureOpenAISample**: Azure OpenAI integration example
+
+Each sample will:
+
 - Ensure the default schema and (optionally) HNSW index
-- Upsert a couple of documents
-- Perform a vector search
-- Call `AskAsync` to answer a question using retrieved context
+- Upsert sample documents with tags and sources
+- Perform filtered vector searches
+- Call `AskAsync` to answer questions using retrieved context
 
 ### Core API (glance)
 
@@ -125,19 +136,115 @@ var store = new TiDBVectorStoreBuilder(connectionString)
     .Build();
 ```
 
-
-
 await store.EnsureSchemaAsync();
 
 await store.UpsertAsync(new UpsertItem
 {
-    Id = "sample-1",
-    Collection = "docs",
-    Content = "Fish live in water and are known for their swimming abilities."
+Id = "sample-1",
+Collection = "docs",
+Content = "Fish live in water and are known for their swimming abilities."
 });
 
 var results = await store.SearchAsync("a swimming animal", topK: 3);
 var answer = await store.AskAsync("Name an animal that swims.");
+
+````
+
+### Advanced Filtering
+
+The SDK supports powerful filtering capabilities for multi-tenant and fine-grained search:
+
+#### **Collection Filtering**
+Filter by a specific collection (one at a time for simplicity):
+
+```csharp
+var results = await store.SearchAsync(
+    "query",
+    searchOptions: new SearchOptions { Collection = "engineering-docs" }
+);
+````
+
+#### **Tag Filtering**
+
+Filter by key-value pairs in the dedicated tags JSON column:
+
+```csharp
+var results = await store.SearchAsync(
+    "query",
+    searchOptions: new SearchOptions
+    {
+        TagFilters = new Dictionary<string, string>
+        {
+            ["OrganizationId"] = "org-123",
+            ["Department"] = "Engineering"
+        },
+        TagMode = TagFilterMode.And  // All tags must match
+    }
+);
+```
+
+#### **Combined Filtering**
+
+Combine collection and tag filtering:
+
+```csharp
+var results = await store.SearchAsync(
+    "query",
+    searchOptions: new SearchOptions
+    {
+        Collection = "engineering-docs",
+        TagFilters = new Dictionary<string, string>
+        {
+            ["OrganizationId"] = "org-123",
+            ["Department"] = "Engineering"
+        }
+    }
+);
+```
+
+#### **Document Structure with Tags**
+
+When upserting documents, use the dedicated tags column for filtering:
+
+```csharp
+await store.UpsertAsync(new UpsertItem
+{
+    Id = "doc-1",
+    Collection = "engineering-docs",
+    Content = "How to implement microservices...",
+    Source = "https://docs.company.com/guide.pdf",
+    Metadata = JsonDocument.Parse("""
+    {
+        "Category": "Architecture",
+        "Tags": ["microservices", "docker"]
+    }
+    """),
+    Tags = JsonDocument.Parse("""
+    {
+        "OrganizationId": "org-123",
+        "Department": "Engineering"
+    }
+    """)
+});
+```
+
+#### **RAG with Filtering**
+
+Use filtering in RAG queries:
+
+```csharp
+var answer = await store.AskAsync(
+    "What are the best practices for software development?",
+    topK: 3,
+    searchOptions: new SearchOptions
+    {
+        Collection = "engineering-docs",
+        TagFilters = new Dictionary<string, string>
+        {
+            ["Department"] = "Engineering"
+        }
+    }
+);
 ```
 
 #### Azure OpenAI Example
@@ -162,16 +269,24 @@ var store = new TiDBVectorStoreBuilder(
 
 - Table: `tidb_vectors`
   - `collection VARCHAR(128)` + `id VARCHAR(64)` as composite primary key
-  - `embedding VECTOR(D)` where `D` = embedding dimension (e.g., 1536)
-  - `content TEXT`, `metadata JSON`, timestamps
+  - `embedding VECTOR` (variable dimensions supported)
+  - `content TEXT`, `metadata JSON`, `source VARCHAR(512)`, `tags JSON`, timestamps
 - Index (optional, HNSW):
   - Cosine: `CREATE VECTOR INDEX idx_tidb_vectors_embedding_cosine ON tidb_vectors ((VEC_COSINE_DISTANCE(embedding))) USING HNSW;`
   - L2: `CREATE VECTOR INDEX idx_tidb_vectors_embedding_l2 ON tidb_vectors ((VEC_L2_DISTANCE(embedding))) USING HNSW;`
 
-Notes:
-- Fixed dimension is required to build the vector index.
-- TiFlash replica is required for building/using the HNSW index.
-- To keep index usage when filtering, the SDK performs KNN first in a subquery, then applies filters.
+**Schema Features:**
+- **Dedicated tags column**: Efficient JSON-based filtering without parsing metadata
+- **Source tracking**: Track document origins (URLs, file paths, etc.)
+- **Variable vector dimensions**: Support for different embedding models
+- **TiFlash replica required** for building/using the HNSW index
+- **Optimized filtering**: KNN first, then apply filters to maintain index usage
+
+**Filtering Performance:**
+- **Dedicated tags column**: Faster than parsing metadata JSON for filtering
+- **TiDB JSON optimization**: Leverages TiDB's binary JSON serialization for quick access
+- **Index-friendly**: Maintains vector index usage during filtered searches
+- **Multi-tenant ready**: Efficient organization/department filtering for SaaS applications
 
 ### OpenAI integration
 
@@ -186,13 +301,17 @@ Ensure the table dimension matches the chosen embedding model’s dimension.
 Use standard ADO.NET format (not URL form), e.g.:
 
 ```
+
 Server=<host>;Port=4000;User ID=<user>;Password=<pwd>;Database=<db>;SslMode=VerifyFull;
+
 ```
 
 If you must provide a custom CA bundle, append:
 
 ```
+
 SslCa=C:\\path\\to\\isrgrootx1.pem;
+
 ```
 
 ### Current Architecture
@@ -236,8 +355,9 @@ We're planning to restructure the architecture for better user experience:
 - Iteration 5: OpenAI embeddings/chat + RAG `AskAsync` ✅
 - Iteration 6: Azure OpenAI integration + additional providers ✅
 - **Iteration 7**: OpenAI built into core + provider abstraction layer ✅ **COMPLETED**
-- **Iteration 8**: Additional provider extensions (Gemini, Claude, etc.)
-- **Iteration 9+**: Advanced features (filters, metrics, streaming, hybrid search)
+- **Iteration 8**: Advanced filtering (collection + tag filtering) + source tracking ✅ **COMPLETED**
+- **Iteration 9**: Additional provider extensions (Gemini, Claude, etc.)
+- **Iteration 10+**: Advanced features (metrics, streaming, hybrid search, performance optimizations)
 
 ### Contributing
 
@@ -256,3 +376,4 @@ Open an issue to discuss larger proposals or provider integrations. Repo: [manas
 - Official OpenAI .NET SDK for embeddings/chat
 
 
+```
