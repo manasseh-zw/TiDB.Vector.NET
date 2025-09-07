@@ -1,3 +1,5 @@
+using TiDB.Vector.Models;
+
 namespace TiDB.Vector.Options
 {
     /// <summary>
@@ -11,43 +13,41 @@ namespace TiDB.Vector.Options
         public string? Collection { get; set; }
 
         /// <summary>
-        /// Filter by key-value pairs in the dedicated tags JSON column. 
-        /// Key is the tags field name, value is the expected string value.
+        /// Filter by tags using the new TagFilter type for better developer experience.
         /// This is more efficient than filtering metadata as it uses a dedicated JSON column.
         /// </summary>
         /// <example>
-        /// // Filter by single collection and tags
+        /// // Filter by single collection and tags using new Tag type
         /// var searchOptions = new SearchOptions
         /// {
         ///     Collection = "engineering-docs",
-        ///     TagFilters = new Dictionary&lt;string, string&gt;
+        ///     TagFilter = new TagFilter(new[]
         ///     {
-        ///         ["OrganizationId"] = "org-123",
-        ///         ["Department"] = "Engineering"
-        ///     }
+        ///         new Tag("OrganizationId", "org-123"),
+        ///         new Tag("Department", "Engineering")
+        ///     }, TagFilterMode.And)
+        /// };
+        /// 
+        /// // Or using implicit conversion
+        /// var searchOptions2 = new SearchOptions
+        /// {
+        ///     TagFilter = new Tag("Department", "Engineering")
         /// };
         /// </example>
+        public TagFilter? TagFilter { get; set; }
+
+        /// <summary>
+        /// Legacy tag filters for backward compatibility.
+        /// This property is deprecated. Use TagFilter instead for better type safety.
+        /// </summary>
+        [Obsolete("Use TagFilter property instead for better type safety and developer experience.")]
         public Dictionary<string, string>? TagFilters { get; set; }
 
         /// <summary>
-        /// How to combine multiple tag filters. Default is And (all must match).
+        /// Legacy tag mode for backward compatibility.
+        /// This property is deprecated. Use TagFilter.Mode instead.
         /// </summary>
+        [Obsolete("Use TagFilter.Mode property instead.")]
         public TagFilterMode TagMode { get; set; } = TagFilterMode.And;
-    }
-
-    /// <summary>
-    /// How to combine multiple tag filters
-    /// </summary>
-    public enum TagFilterMode
-    {
-        /// <summary>
-        /// All tag filters must match (AND logic)
-        /// </summary>
-        And,
-
-        /// <summary>
-        /// Any tag filter can match (OR logic)
-        /// </summary>
-        Or
     }
 }

@@ -28,6 +28,7 @@ public static class FilteringSample
         await store.EnsureSchemaAsync();
 
         // Sample documents with different organizations and departments
+        // Using the new Tag type for better developer experience!
         var documents = new[]
         {
             new UpsertItem
@@ -42,12 +43,7 @@ public static class FilteringSample
                     "Tags": ["microservices", "docker", "kubernetes"]
                 }
                 """),
-                Tags = JsonDocument.Parse("""
-                {
-                    "OrganizationId": "org-123",
-                    "Department": "Engineering"
-                }
-                """)
+                Tags = [new Tag("OrganizationId", "org-123"), new Tag("Department", "Engineering")]
             },
             new UpsertItem
             {
@@ -61,12 +57,7 @@ public static class FilteringSample
                     "Tags": ["code-review", "git", "process"]
                 }
                 """),
-                Tags = JsonDocument.Parse("""
-                {
-                    "OrganizationId": "org-123",
-                    "Department": "Engineering"
-                }
-                """)
+                Tags = new[] { new Tag("OrganizationId", "org-123"), new Tag("Department", "Engineering") }
             },
             new UpsertItem
             {
@@ -80,12 +71,7 @@ public static class FilteringSample
                     "Tags": ["onboarding", "policies", "hr"]
                 }
                 """),
-                Tags = JsonDocument.Parse("""
-                {
-                    "OrganizationId": "org-123",
-                    "Department": "HR"
-                }
-                """)
+                Tags = new[] { new Tag("OrganizationId", "org-123"), new Tag("Department", "HR") }
             },
             new UpsertItem
             {
@@ -99,12 +85,7 @@ public static class FilteringSample
                     "Tags": ["database", "optimization", "performance"]
                 }
                 """),
-                Tags = JsonDocument.Parse("""
-                {
-                    "OrganizationId": "org-456",
-                    "Department": "Engineering"
-                }
-                """)
+                Tags = new[] { new Tag("OrganizationId", "org-456"), new Tag("Department", "Engineering") }
             },
             new UpsertItem
             {
@@ -118,12 +99,7 @@ public static class FilteringSample
                     "Tags": ["social-media", "marketing", "campaigns"]
                 }
                 """),
-                Tags = JsonDocument.Parse("""
-                {
-                    "OrganizationId": "org-456",
-                    "Department": "Marketing"
-                }
-                """)
+                Tags = new[] { new Tag("OrganizationId", "org-456"), new Tag("Department", "Marketing") }
             }
         };
 
@@ -160,17 +136,14 @@ public static class FilteringSample
             Console.WriteLine($"      Distance: {result.Distance:F4}");
         }
 
-        // 3. Filter by OrganizationId (key-value filtering)
-        Console.WriteLine("\n3️⃣ Filter by OrganizationId (org-123 only):");
+        // 3. Filter by OrganizationId using new TagFilter (much cleaner!)
+        Console.WriteLine("\n3️⃣ Filter by OrganizationId (org-123 only) - NEW WAY:");
         var org123Results = await store.SearchAsync(
             "processes and practices",
             topK: 3,
             new SearchOptions
             {
-                TagFilters = new Dictionary<string, string>
-                {
-                    ["OrganizationId"] = "org-123"
-                }
+                TagFilter = new Tag("OrganizationId", "org-123")
             }
         );
         foreach (var result in org123Results)
@@ -179,19 +152,18 @@ public static class FilteringSample
             Console.WriteLine($"      Distance: {result.Distance:F4}");
         }
 
-        // 4. Filter by multiple key-value pairs (AND logic)
-        Console.WriteLine("\n4️⃣ Filter by OrganizationId AND Department (org-123 + Engineering):");
+        // 4. Filter by multiple tags using new TagFilter (AND logic)
+        Console.WriteLine("\n4️⃣ Filter by OrganizationId AND Department (org-123 + Engineering) - NEW WAY:");
         var org123EngineeringResults = await store.SearchAsync(
             "development practices",
             topK: 3,
             new SearchOptions
             {
-                TagFilters = new Dictionary<string, string>
+                TagFilter = new TagFilter(new[]
                 {
-                    ["OrganizationId"] = "org-123",
-                    ["Department"] = "Engineering"
-                },
-                TagMode = TagFilterMode.And
+                    new Tag("OrganizationId", "org-123"),
+                    new Tag("Department", "Engineering")
+                }, TagFilterMode.And)
             }
         );
         foreach (var result in org123EngineeringResults)
@@ -213,17 +185,14 @@ public static class FilteringSample
             Console.WriteLine($"      Distance: {result.Distance:F4}");
         }
 
-        // 6. Filter by Department (Engineering only)
-        Console.WriteLine("\n6️⃣ Filter by Department (Engineering only):");
+        // 6. Filter by Department (Engineering only) using new TagFilter
+        Console.WriteLine("\n6️⃣ Filter by Department (Engineering only) - NEW WAY:");
         var engineeringOnlyResults = await store.SearchAsync(
             "best practices",
             topK: 3,
             new SearchOptions
             {
-                TagFilters = new Dictionary<string, string>
-                {
-                    ["Department"] = "Engineering"
-                }
+                TagFilter = new Tag("Department", "Engineering")
             }
         );
         foreach (var result in engineeringOnlyResults)
@@ -232,17 +201,14 @@ public static class FilteringSample
             Console.WriteLine($"      Distance: {result.Distance:F4}");
         }
 
-        // 7. Ask with filtering
-        Console.WriteLine("\n7️⃣ Ask with filtering (Engineering department only):");
+        // 7. Ask with filtering using new TagFilter
+        Console.WriteLine("\n7️⃣ Ask with filtering (Engineering department only) - NEW WAY:");
         var answer = await store.AskAsync(
             "What are the best practices for software development?",
             topK: 3,
             new SearchOptions
             {
-                TagFilters = new Dictionary<string, string>
-                {
-                    ["Department"] = "Engineering"
-                }
+                TagFilter = new Tag("Department", "Engineering")
             }
         );
         Console.WriteLine($"   💬 Answer: {answer.Text}");
@@ -252,6 +218,44 @@ public static class FilteringSample
             Console.WriteLine($"      📄 {source.Id} | Source: {source.Source} | Distance: {source.Distance:F4}");
         }
 
+        // 8. Demonstrate the improved DX with more examples
+        Console.WriteLine("\n8️⃣ More examples of the improved Tag DX:");
+
+        // Using tuple syntax (implicit conversion)
+        Console.WriteLine("\n   Using tuple syntax:");
+        var tupleResults = await store.SearchAsync(
+            "best practices",
+            topK: 2,
+            new SearchOptions
+            {
+                TagFilter = new Tag("Department", "Engineering") // Using Tag constructor
+            }
+        );
+        foreach (var result in tupleResults)
+        {
+            Console.WriteLine($"      📄 {result.Id} | {result.Collection}");
+        }
+
+        // Using OR logic with multiple tags
+        Console.WriteLine("\n   Using OR logic (Engineering OR Marketing):");
+        var orResults = await store.SearchAsync(
+            "best practices",
+            topK: 3,
+            new SearchOptions
+            {
+                TagFilter = new TagFilter(new[]
+                {
+                    new Tag("Department", "Engineering"),
+                    new Tag("Department", "Marketing")
+                }, TagFilterMode.Or)
+            }
+        );
+        foreach (var result in orResults)
+        {
+            Console.WriteLine($"      📄 {result.Id} | {result.Collection}");
+        }
+
         Console.WriteLine("\n✅ Advanced filtering sample completed!");
+        Console.WriteLine("\n🎉 Notice how much cleaner the new Tag API is compared to JSON parsing!");
     }
 }

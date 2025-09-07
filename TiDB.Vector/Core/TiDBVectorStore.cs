@@ -173,7 +173,7 @@ ON DUPLICATE KEY UPDATE
                     cmd.Parameters.AddWithValue("@source", (object?)item.Source ?? DBNull.Value);
                     cmd.Parameters.AddWithValue(
                         "@tags",
-                        item.Tags is null ? DBNull.Value : JsonSerializer.Serialize(item.Tags)
+                        GetTagsJson(item)
                     );
                     cmd.Parameters.AddWithValue("@embeddingText", embeddingTextChunk);
                     await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -366,7 +366,7 @@ ON DUPLICATE KEY UPDATE
                     cmd.Parameters.AddWithValue("@source", (object?)item.Source ?? DBNull.Value);
                     cmd.Parameters.AddWithValue(
                         "@tags",
-                        item.Tags is null ? DBNull.Value : JsonSerializer.Serialize(item.Tags)
+                        GetTagsJson(item)
                     );
                     cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
                     await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -421,19 +421,25 @@ ON DUPLICATE KEY UPDATE
             }
 
             // Tag filtering with key-value pairs using dedicated tags JSON column
-            if (searchOptions?.TagFilters != null && searchOptions.TagFilters.Count > 0)
+            var tagFilters = searchOptions?.TagFilter?.Tags ??
+                           (searchOptions?.TagFilters != null ?
+                               searchOptions.TagFilters.Select(kvp => new Tag(kvp.Key, kvp.Value)) :
+                               null);
+            var tagMode = searchOptions?.TagFilter?.Mode ?? searchOptions?.TagMode ?? TagFilterMode.And;
+
+            if (tagFilters != null && tagFilters.Any())
             {
                 var tagConditions = new List<string>();
-                foreach (var (key, value) in searchOptions.TagFilters)
+                foreach (var tag in tagFilters)
                 {
-                    var paramName = $"@tag_{key}";
-                    tagConditions.Add($"JSON_UNQUOTE(JSON_EXTRACT(tags, '$.{key}')) = {paramName}");
-                    parameters.Add((paramName, value));
+                    var paramName = $"@tag_{tag.Key}";
+                    tagConditions.Add($"JSON_UNQUOTE(JSON_EXTRACT(tags, '$.{tag.Key}')) = {paramName}");
+                    parameters.Add((paramName, tag.Value));
                 }
 
                 if (tagConditions.Count > 0)
                 {
-                    var tagOperator = searchOptions.TagMode == TagFilterMode.And ? " AND " : " OR ";
+                    var tagOperator = tagMode == TagFilterMode.And ? " AND " : " OR ";
                     whereConditions.Add($"({string.Join(tagOperator, tagConditions)})");
                 }
             }
@@ -678,6 +684,24 @@ LIMIT @k";
             }
             sb.Append(']');
             return sb.ToString();
+        }
+
+        private static object GetTagsJson(UpsertItem item)
+        {
+            // Handle new Tags property first
+            if (item.Tags != null && item.Tags.Any())
+            {
+                var jsonDoc = Tag.ToJsonDocument(item.Tags);
+                return jsonDoc?.RootElement.GetRawText() ?? (object)DBNull.Value;
+            }
+
+            // Fall back to legacy TagsJson property for backward compatibility
+            if (item.TagsJson != null)
+            {
+                return JsonSerializer.Serialize(item.TagsJson);
+            }
+
+            return DBNull.Value;
         }
 
         private async Task EnsureTiFlashReplicaAsync(
