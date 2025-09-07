@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>TiDB.Vector.AzureOpenAI</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Authors>manasseh-zw</Authors>
     <Company>TiDB.Vector.NET</Company>
     <Description>Azure OpenAI integration for TiDB.Vector. Provides Azure OpenAI embeddings and chat completion capabilities. Requires TiDB.Vector core package.</Description>
