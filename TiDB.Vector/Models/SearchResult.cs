@@ -8,6 +8,8 @@ namespace TiDB.Vector.Models
         public string Collection { get; init; } = string.Empty;
         public string? Content { get; init; }
         public JsonDocument? Metadata { get; init; }
+        public string? Source { get; init; }
+        public JsonDocument? Tags { get; init; }
         public double Distance { get; init; }
     }
 }

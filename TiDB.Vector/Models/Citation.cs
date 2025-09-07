@@ -7,6 +7,7 @@ namespace TiDB.Vector.Models
         public string Id { get; init; } = string.Empty;
         public string? Snippet { get; init; }
         public double Distance { get; init; }
+        public string? Source { get; init; }
     }
 }
 

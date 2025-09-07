@@ -1,5 +1,6 @@
 ﻿using TiDB.Vector.Samples;
-using TiDB.Vector.Samples.Samples;
 
 AppConfig.Load();
-await AzureOpenAISample.RunAsync();
+
+// Run the advanced filtering sample
+await FilteringSample.RunAsync();

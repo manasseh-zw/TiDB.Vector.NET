@@ -16,9 +16,11 @@ namespace TiDB.Vector.Models
         public string Collection { get; init; } = string.Empty;
         public string? Content { get; init; }
         public JsonDocument? Metadata { get; init; }
+        public string? Source { get; init; }
+        public JsonDocument? Tags { get; init; }
         public float[]? Embedding { get; init; }
         public ContentType ContentType { get; init; } = ContentType.PlainText;
     }
 }
 
-    
+
