@@ -14,16 +14,19 @@ namespace TiDB.Vector.Core
     {
         private readonly string _connectionString;
         private readonly string _defaultCollection;
+        private readonly string _tableName;
         private readonly DistanceFunction _distanceFunction;
         private readonly int _embeddingDimension;
         private readonly IEmbeddingGenerator? _embeddingGenerator;
         private readonly ITextGenerator? _textGenerator;
         private readonly bool _ensureSchema;
         private readonly bool _createVectorIndex;
+        private bool _schemaEnsured;
 
         internal TiDBVectorStore(
             string connectionString,
             string defaultCollection,
+            string tableName,
             DistanceFunction distanceFunction,
             int embeddingDimension,
             IEmbeddingGenerator? embeddingGenerator,
@@ -34,12 +37,14 @@ namespace TiDB.Vector.Core
         {
             _connectionString = connectionString;
             _defaultCollection = defaultCollection;
+            _tableName = string.IsNullOrWhiteSpace(tableName) ? "tidb_vectors" : tableName;
             _distanceFunction = distanceFunction;
             _embeddingDimension = embeddingDimension;
             _embeddingGenerator = embeddingGenerator;
             _textGenerator = textGenerator;
             _ensureSchema = ensureSchema;
             _createVectorIndex = createVectorIndex;
+            _schemaEnsured = false;
         }
 
         public async Task EnsureSchemaAsync(
@@ -52,17 +57,21 @@ namespace TiDB.Vector.Core
             await using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-            // Create table tidb_vectors with composite PK (collection, id)
+            // Create table with composite PK (collection, id)
             // Create table with source and tags columns for efficient filtering
+            // Require a fixed vector dimension for index support
+            if (_embeddingDimension <= 0)
+                throw new InvalidOperationException("Embedding dimension must be set (> 0) before ensuring schema. Configure your embedding generator (e.g., AddOpenAITextEmbedding) or set a dimension on the builder.");
+
             string ddl =
-                @"CREATE TABLE IF NOT EXISTS tidb_vectors (
+                $@"CREATE TABLE IF NOT EXISTS {_tableName} (
                 collection  VARCHAR(128) NOT NULL,
                 id          VARCHAR(64) NOT NULL,
                 content     TEXT NULL,
                 metadata    JSON NULL,
                 source      VARCHAR(512) NULL,
                 tags        JSON NULL,
-                embedding   VECTOR NOT NULL,
+                embedding   VECTOR({_embeddingDimension}) NOT NULL,
                 created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (collection, id)
@@ -75,6 +84,19 @@ namespace TiDB.Vector.Core
 
             if (createIndex)
             {
+                if (_embeddingDimension <= 0)
+                    throw new InvalidOperationException("Embedding dimension must be set (> 0) to create a vector index.");
+                // Ensure the embedding column is fixed-dimension even if table pre-existed
+                try
+                {
+                    string alter = $"ALTER TABLE {_tableName} MODIFY COLUMN embedding VECTOR({_embeddingDimension}) NOT NULL;";
+                    await using var alterCmd = new MySqlCommand(alter, conn);
+                    await alterCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (MySqlException)
+                {
+                    // Best-effort: ignore if already correct or not supported
+                }
                 // Best effort: ensure a TiFlash replica exists (ignored if not supported or already set)
                 await EnsureTiFlashReplicaAsync(conn, cancellationToken).ConfigureAwait(false);
                 await CreateVectorIndexAsync(conn, cancellationToken).ConfigureAwait(false);
@@ -87,6 +109,11 @@ namespace TiDB.Vector.Core
             CancellationToken cancellationToken = default
         )
         {
+            if (_ensureSchema && !_schemaEnsured)
+            {
+                await EnsureSchemaAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                _schemaEnsured = true;
+            }
             ArgumentNullException.ThrowIfNull(item);
             var collection = string.IsNullOrWhiteSpace(item.Collection)
                 ? _defaultCollection
@@ -127,8 +154,8 @@ namespace TiDB.Vector.Core
                 await using var conn = new MySqlConnection(_connectionString);
                 await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-                const string sqlChunk =
-                    @"INSERT INTO tidb_vectors (collection, id, content, metadata, source, tags, embedding)
+                string sqlChunk =
+                    $@"INSERT INTO {_tableName} (collection, id, content, metadata, source, tags, embedding)
 VALUES (@collection, @id, @content, @metadata, @source, @tags, CAST(@embeddingText AS VECTOR))
 ON DUPLICATE KEY UPDATE
   content = VALUES(content),
@@ -204,8 +231,8 @@ ON DUPLICATE KEY UPDATE
                 await using var conn = new MySqlConnection(_connectionString);
                 await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-                const string sql =
-                    @"INSERT INTO tidb_vectors (collection, id, content, metadata, source, tags, embedding)
+                string sql =
+                    $@"INSERT INTO {_tableName} (collection, id, content, metadata, source, tags, embedding)
 VALUES (@collection, @id, @content, @metadata, @source, @tags, CAST(@embeddingText AS VECTOR))
 ON DUPLICATE KEY UPDATE
   content = VALUES(content),
@@ -253,8 +280,8 @@ ON DUPLICATE KEY UPDATE
             await using var tx = await conn.BeginTransactionAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            const string sql =
-                @"INSERT INTO tidb_vectors (collection, id, content, metadata, source, tags, embedding)
+            string sql =
+                $@"INSERT INTO {_tableName} (collection, id, content, metadata, source, tags, embedding)
 VALUES (@collection, @id, @content, @metadata, @source, @tags, CAST(@embeddingText AS VECTOR))
 ON DUPLICATE KEY UPDATE
   content = VALUES(content),
@@ -451,7 +478,7 @@ ON DUPLICATE KEY UPDATE
             string sql =
                 $@"SELECT * FROM (
   SELECT id, collection, content, metadata, source, tags, {distanceExpr} AS distance
-  FROM tidb_vectors
+  FROM {_tableName}
   {whereClause}
   ORDER BY distance
   LIMIT @kPrime
@@ -521,7 +548,7 @@ LIMIT @k";
         {
             await using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-            const string sql = "ALTER TABLE tidb_vectors COMPACT;";
+            string sql = $"ALTER TABLE {_tableName} COMPACT;";
             try
             {
                 await using var cmd = new MySqlCommand(sql, conn);
@@ -563,7 +590,7 @@ LIMIT @k";
             string explain =
                 $@"EXPLAIN SELECT * FROM (
   SELECT id, collection, content, metadata, {distanceExpr} AS distance
-  FROM tidb_vectors
+  FROM {_tableName}
   ORDER BY distance
   LIMIT @kPrime
 ) t
@@ -709,7 +736,7 @@ LIMIT @k";
             CancellationToken cancellationToken
         )
         {
-            const string sql = "ALTER TABLE tidb_vectors SET TIFLASH REPLICA 1;";
+            string sql = $"ALTER TABLE {_tableName} SET TIFLASH REPLICA 1;";
             try
             {
                 await using var cmd = new MySqlCommand(sql, conn);
@@ -733,17 +760,18 @@ LIMIT @k";
 
             string createSql =
                 _distanceFunction == DistanceFunction.Cosine
-                    ? $"CREATE VECTOR INDEX {indexName} ON tidb_vectors ((VEC_COSINE_DISTANCE(embedding))) USING HNSW;"
-                    : $"CREATE VECTOR INDEX {indexName} ON tidb_vectors ((VEC_L2_DISTANCE(embedding))) USING HNSW;";
+                    ? $"CREATE VECTOR INDEX {indexName} ON {_tableName} ((VEC_COSINE_DISTANCE(embedding))) USING HNSW;"
+                    : $"CREATE VECTOR INDEX {indexName} ON {_tableName} ((VEC_L2_DISTANCE(embedding))) USING HNSW;";
 
             // Pre-check via INFORMATION_SCHEMA.TIFLASH_INDEXES if possible
             try
             {
-                const string existsSql =
+                string existsSql =
                     @"SELECT COUNT(1) FROM INFORMATION_SCHEMA.TIFLASH_INDEXES
-WHERE TIDB_DATABASE = DATABASE() AND TIDB_TABLE = 'tidb_vectors' AND INDEX_NAME = @indexName;";
+WHERE TIDB_DATABASE = DATABASE() AND TIDB_TABLE = @table AND INDEX_NAME = @indexName;";
                 await using var existsCmd = new MySqlCommand(existsSql, conn);
                 existsCmd.Parameters.AddWithValue("@indexName", indexName);
+                existsCmd.Parameters.AddWithValue("@table", _tableName);
                 var countObj = await existsCmd
                     .ExecuteScalarAsync(cancellationToken)
                     .ConfigureAwait(false);

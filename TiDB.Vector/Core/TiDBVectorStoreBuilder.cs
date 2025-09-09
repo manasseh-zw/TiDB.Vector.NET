@@ -7,6 +7,7 @@ namespace TiDB.Vector.Core
     {
         private readonly string _connectionString;
         private string _defaultCollection = "default";
+        private string _tableName = "tidb_vectors";
         private DistanceFunction _distanceFunction = DistanceFunction.Cosine;
         private int _embeddingDimension = 1568; // default per project decision
         private IEmbeddingGenerator? _embeddingGenerator;
@@ -30,6 +31,13 @@ namespace TiDB.Vector.Core
         public TiDBVectorStoreBuilder WithDefaultCollection(string collection)
         {
             _defaultCollection = string.IsNullOrWhiteSpace(collection) ? _defaultCollection : collection;
+            return this;
+        }
+
+        public TiDBVectorStoreBuilder WithTableName(string tableName)
+        {
+            if (!string.IsNullOrWhiteSpace(tableName))
+                _tableName = tableName.Trim();
             return this;
         }
 
@@ -64,6 +72,7 @@ namespace TiDB.Vector.Core
             return new TiDBVectorStore(
                 _connectionString,
                 _defaultCollection,
+                _tableName,
                 _distanceFunction,
                 _embeddingDimension,
                 _embeddingGenerator,

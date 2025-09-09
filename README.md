@@ -4,6 +4,16 @@ Ergonomic C# SDK for TiDB Vector Search: upsert, search, and RAG with a fluent b
 
 Repository: [manasseh-zw/TiDB.Vector.NET](https://github.com/manasseh-zw/TiDB.Vector.NET)
 
+### Installation
+
+```bash
+# Core package with OpenAI built-in (recommended)
+dotnet add package TiDB.Vector
+
+# Azure OpenAI integration (optional, extends core)
+dotnet add package TiDB.Vector.AzureOpenAI
+```
+
 ### Features
 
 - Fluent builder to wire connection, embeddings, and chat
@@ -136,6 +146,7 @@ var store = new TiDBVectorStoreBuilder(connectionString)
     .Build();
 ```
 
+```csharp
 await store.EnsureSchemaAsync();
 
 await store.UpsertAsync(new UpsertItem
@@ -148,13 +159,14 @@ Content = "Fish live in water and are known for their swimming abilities."
 var results = await store.SearchAsync("a swimming animal", topK: 3);
 var answer = await store.AskAsync("Name an animal that swims.");
 
-````
+```
 
 ### Advanced Filtering
 
 The SDK supports powerful filtering capabilities for multi-tenant and fine-grained search:
 
 #### **Collection Filtering**
+
 Filter by a specific collection (one at a time for simplicity):
 
 ```csharp
@@ -162,30 +174,29 @@ var results = await store.SearchAsync(
     "query",
     searchOptions: new SearchOptions { Collection = "engineering-docs" }
 );
-````
+```
 
-#### **Tag Filtering**
+#### **Tag Filtering (New DX)**
 
-Filter by key-value pairs in the dedicated tags JSON column:
+Type-safe tag filters using `Tag` and `TagFilter`:
 
 ```csharp
+using TiDB.Vector.Models;
+
 var results = await store.SearchAsync(
     "query",
     searchOptions: new SearchOptions
     {
-        TagFilters = new Dictionary<string, string>
+        TagFilter = new TagFilter(new[]
         {
-            ["OrganizationId"] = "org-123",
-            ["Department"] = "Engineering"
-        },
-        TagMode = TagFilterMode.And  // All tags must match
+            new Tag("OrganizationId", "org-123"),
+            new Tag("Department", "Engineering")
+        }, TagFilterMode.And)
     }
 );
 ```
 
 #### **Combined Filtering**
-
-Combine collection and tag filtering:
 
 ```csharp
 var results = await store.SearchAsync(
@@ -193,18 +204,18 @@ var results = await store.SearchAsync(
     searchOptions: new SearchOptions
     {
         Collection = "engineering-docs",
-        TagFilters = new Dictionary<string, string>
+        TagFilter = new TagFilter(new[]
         {
-            ["OrganizationId"] = "org-123",
-            ["Department"] = "Engineering"
-        }
+            new Tag("OrganizationId", "org-123"),
+            new Tag("Department", "Engineering")
+        }, TagFilterMode.And)
     }
 );
 ```
 
 #### **Document Structure with Tags**
 
-When upserting documents, use the dedicated tags column for filtering:
+When upserting documents, use the dedicated tags column with `Tag`:
 
 ```csharp
 await store.UpsertAsync(new UpsertItem
@@ -219,12 +230,7 @@ await store.UpsertAsync(new UpsertItem
         "Tags": ["microservices", "docker"]
     }
     """),
-    Tags = JsonDocument.Parse("""
-    {
-        "OrganizationId": "org-123",
-        "Department": "Engineering"
-    }
-    """)
+    Tags = new[] { new Tag("OrganizationId", "org-123"), new Tag("Department", "Engineering") }
 });
 ```
 
@@ -239,10 +245,7 @@ var answer = await store.AskAsync(
     searchOptions: new SearchOptions
     {
         Collection = "engineering-docs",
-        TagFilters = new Dictionary<string, string>
-        {
-            ["Department"] = "Engineering"
-        }
+        TagFilter = new Tag("Department", "Engineering")
     }
 );
 ```
@@ -265,6 +268,8 @@ var store = new TiDBVectorStoreBuilder(
     .EnsureSchema(createVectorIndex: true)
     .Build();
 
+```
+
 ### Default Schema and Index
 
 - Table: `tidb_vectors`
@@ -276,6 +281,7 @@ var store = new TiDBVectorStoreBuilder(
   - L2: `CREATE VECTOR INDEX idx_tidb_vectors_embedding_l2 ON tidb_vectors ((VEC_L2_DISTANCE(embedding))) USING HNSW;`
 
 **Schema Features:**
+
 - **Dedicated tags column**: Efficient JSON-based filtering without parsing metadata
 - **Source tracking**: Track document origins (URLs, file paths, etc.)
 - **Variable vector dimensions**: Support for different embedding models
@@ -283,6 +289,7 @@ var store = new TiDBVectorStoreBuilder(
 - **Optimized filtering**: KNN first, then apply filters to maintain index usage
 
 **Filtering Performance:**
+
 - **Dedicated tags column**: Faster than parsing metadata JSON for filtering
 - **TiDB JSON optimization**: Leverages TiDB's binary JSON serialization for quick access
 - **Index-friendly**: Maintains vector index usage during filtered searches
@@ -291,6 +298,7 @@ var store = new TiDBVectorStoreBuilder(
 ### OpenAI integration
 
 Built into the core package using the official OpenAI .NET SDK 2.x:
+
 - Embeddings: `EmbeddingClient` (`text-embedding-3-small` 1536 dims, `text-embedding-3-large` 3072 dims)
 - Chat: `ChatClient` (e.g., `gpt-4o-mini`)
 
@@ -328,18 +336,21 @@ The project now has OpenAI integration built into the core package:
 We're planning to restructure the architecture for better user experience:
 
 #### **Phase 1: OpenAI Built-In ✅ COMPLETED**
+
 - **`TiDB.Vector`** - Core + OpenAI integration built-in by default
 - Users get AI capabilities out of the box with one package
 - **OpenAI-compatible endpoint support** for local models and other providers
 - Provider abstraction layer for easy integration with OpenAI-compatible services
 
 #### **Phase 2: Provider Extensions**
+
 - **`TiDB.Vector.AzureOpenAI`** - Azure-specific optimizations
 - **`TiDB.Vector.GoogleGemini`** - Google Gemini integration
 - **`TiDB.Vector.Anthropic`** - Anthropic Claude integration
 - **`TiDB.Vector.Custom`** - Template for custom provider implementations
 
 #### **Benefits of New Architecture**
+
 - ✅ **One package = full functionality**
 - ✅ **AI works immediately** without additional packages
 - ✅ **Easy provider switching** via configuration
@@ -362,6 +373,7 @@ We're planning to restructure the architecture for better user experience:
 ### Contributing
 
 We welcome issues and PRs! To contribute:
+
 - Fork the repo and create a feature branch
 - Follow the existing code style (explicit naming, clear control flow)
 - Keep public APIs strongly-typed and documented
@@ -375,5 +387,6 @@ Open an issue to discuss larger proposals or provider integrations. Repo: [manas
 - TiDB Vector Search (data types, functions, HNSW index)
 - Official OpenAI .NET SDK for embeddings/chat
 
+```
 
 ```

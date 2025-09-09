@@ -2,5 +2,5 @@
 
 AppConfig.Load();
 
-// Run the advanced filtering sample
-await FilteringSample.RunAsync();
+// Run the table name + ensure schema sample
+await TableNameSample.RunAsync();

@@ -1,8 +1,8 @@
 using System.Text.Json;
 using TiDB.Vector.Core;
 using TiDB.Vector.Models;
-using TiDB.Vector.Options;
 using TiDB.Vector.OpenAI.Builder;
+using TiDB.Vector.Options;
 
 namespace TiDB.Vector.Samples;
 
@@ -37,13 +37,15 @@ public static class FilteringSample
                 Collection = "engineering-docs",
                 Content = "How to implement microservices architecture with Docker and Kubernetes.",
                 Source = "https://docs.company.com/microservices-guide.pdf",
-                Metadata = JsonDocument.Parse("""
-                {
-                    "Category": "Architecture",
-                    "Tags": ["microservices", "docker", "kubernetes"]
-                }
-                """),
-                Tags = [new Tag("OrganizationId", "org-123"), new Tag("Department", "Engineering")]
+                Metadata = JsonDocument.Parse(
+                    """
+                    {
+                        "Category": "Architecture",
+                        "Tags": ["microservices", "docker", "kubernetes"]
+                    }
+                    """
+                ),
+                Tags = [new Tag("OrganizationId", "org-123"), new Tag("Department", "Engineering")],
             },
             new UpsertItem
             {
@@ -51,13 +53,19 @@ public static class FilteringSample
                 Collection = "engineering-docs",
                 Content = "Best practices for code review and pull request management.",
                 Source = "https://docs.company.com/code-review-guide.pdf",
-                Metadata = JsonDocument.Parse("""
+                Metadata = JsonDocument.Parse(
+                    """
+                    {
+                        "Category": "Process",
+                        "Tags": ["code-review", "git", "process"]
+                    }
+                    """
+                ),
+                Tags = new[]
                 {
-                    "Category": "Process",
-                    "Tags": ["code-review", "git", "process"]
-                }
-                """),
-                Tags = new[] { new Tag("OrganizationId", "org-123"), new Tag("Department", "Engineering") }
+                    new Tag("OrganizationId", "org-123"),
+                    new Tag("Department", "Engineering"),
+                },
             },
             new UpsertItem
             {
@@ -65,13 +73,15 @@ public static class FilteringSample
                 Collection = "hr-docs",
                 Content = "Employee onboarding process and company policies.",
                 Source = "https://hr.company.com/onboarding.pdf",
-                Metadata = JsonDocument.Parse("""
-                {
-                    "Category": "Process",
-                    "Tags": ["onboarding", "policies", "hr"]
-                }
-                """),
-                Tags = new[] { new Tag("OrganizationId", "org-123"), new Tag("Department", "HR") }
+                Metadata = JsonDocument.Parse(
+                    """
+                    {
+                        "Category": "Process",
+                        "Tags": ["onboarding", "policies", "hr"]
+                    }
+                    """
+                ),
+                Tags = new[] { new Tag("OrganizationId", "org-123"), new Tag("Department", "HR") },
             },
             new UpsertItem
             {
@@ -79,13 +89,19 @@ public static class FilteringSample
                 Collection = "engineering-docs",
                 Content = "Database optimization techniques for high-performance applications.",
                 Source = "https://docs.company.com/db-optimization.pdf",
-                Metadata = JsonDocument.Parse("""
+                Metadata = JsonDocument.Parse(
+                    """
+                    {
+                        "Category": "Performance",
+                        "Tags": ["database", "optimization", "performance"]
+                    }
+                    """
+                ),
+                Tags = new[]
                 {
-                    "Category": "Performance",
-                    "Tags": ["database", "optimization", "performance"]
-                }
-                """),
-                Tags = new[] { new Tag("OrganizationId", "org-456"), new Tag("Department", "Engineering") }
+                    new Tag("OrganizationId", "org-456"),
+                    new Tag("Department", "Engineering"),
+                },
             },
             new UpsertItem
             {
@@ -93,14 +109,20 @@ public static class FilteringSample
                 Collection = "marketing-docs",
                 Content = "Social media marketing strategies and campaign management.",
                 Source = "https://marketing.company.com/social-media-guide.pdf",
-                Metadata = JsonDocument.Parse("""
+                Metadata = JsonDocument.Parse(
+                    """
+                    {
+                        "Category": "Strategy",
+                        "Tags": ["social-media", "marketing", "campaigns"]
+                    }
+                    """
+                ),
+                Tags = new[]
                 {
-                    "Category": "Strategy",
-                    "Tags": ["social-media", "marketing", "campaigns"]
-                }
-                """),
-                Tags = new[] { new Tag("OrganizationId", "org-456"), new Tag("Department", "Marketing") }
-            }
+                    new Tag("OrganizationId", "org-456"),
+                    new Tag("Department", "Marketing"),
+                },
+            },
         };
 
         // Upsert all documents
@@ -141,10 +163,7 @@ public static class FilteringSample
         var org123Results = await store.SearchAsync(
             "processes and practices",
             topK: 3,
-            new SearchOptions
-            {
-                TagFilter = new Tag("OrganizationId", "org-123")
-            }
+            new SearchOptions { TagFilter = new Tag("OrganizationId", "org-123") }
         );
         foreach (var result in org123Results)
         {
@@ -153,17 +172,22 @@ public static class FilteringSample
         }
 
         // 4. Filter by multiple tags using new TagFilter (AND logic)
-        Console.WriteLine("\n4️⃣ Filter by OrganizationId AND Department (org-123 + Engineering) - NEW WAY:");
+        Console.WriteLine(
+            "\n4️⃣ Filter by OrganizationId AND Department (org-123 + Engineering) - NEW WAY:"
+        );
         var org123EngineeringResults = await store.SearchAsync(
             "development practices",
             topK: 3,
             new SearchOptions
             {
-                TagFilter = new TagFilter(new[]
-                {
-                    new Tag("OrganizationId", "org-123"),
-                    new Tag("Department", "Engineering")
-                }, TagFilterMode.And)
+                TagFilter = new TagFilter(
+                    new[]
+                    {
+                        new Tag("OrganizationId", "org-123"),
+                        new Tag("Department", "Engineering"),
+                    },
+                    TagFilterMode.And
+                ),
             }
         );
         foreach (var result in org123EngineeringResults)
@@ -190,10 +214,7 @@ public static class FilteringSample
         var engineeringOnlyResults = await store.SearchAsync(
             "best practices",
             topK: 3,
-            new SearchOptions
-            {
-                TagFilter = new Tag("Department", "Engineering")
-            }
+            new SearchOptions { TagFilter = new Tag("Department", "Engineering") }
         );
         foreach (var result in engineeringOnlyResults)
         {
@@ -206,16 +227,15 @@ public static class FilteringSample
         var answer = await store.AskAsync(
             "What are the best practices for software development?",
             topK: 3,
-            new SearchOptions
-            {
-                TagFilter = new Tag("Department", "Engineering")
-            }
+            new SearchOptions { TagFilter = new Tag("Department", "Engineering") }
         );
         Console.WriteLine($"   💬 Answer: {answer.Text}");
         Console.WriteLine($"   📚 Sources ({answer.Sources.Count}):");
         foreach (var source in answer.Sources)
         {
-            Console.WriteLine($"      📄 {source.Id} | Source: {source.Source} | Distance: {source.Distance:F4}");
+            Console.WriteLine(
+                $"      📄 {source.Id} | Source: {source.Source} | Distance: {source.Distance:F4}"
+            );
         }
 
         // 8. Demonstrate the improved DX with more examples
@@ -228,7 +248,7 @@ public static class FilteringSample
             topK: 2,
             new SearchOptions
             {
-                TagFilter = new Tag("Department", "Engineering") // Using Tag constructor
+                TagFilter = new Tag("Department", "Engineering"), // Using Tag constructor
             }
         );
         foreach (var result in tupleResults)
@@ -243,11 +263,14 @@ public static class FilteringSample
             topK: 3,
             new SearchOptions
             {
-                TagFilter = new TagFilter(new[]
-                {
-                    new Tag("Department", "Engineering"),
-                    new Tag("Department", "Marketing")
-                }, TagFilterMode.Or)
+                TagFilter = new TagFilter(
+                    new[]
+                    {
+                        new Tag("Department", "Engineering"),
+                        new Tag("Department", "Marketing"),
+                    },
+                    TagFilterMode.Or
+                ),
             }
         );
         foreach (var result in orResults)
@@ -256,6 +279,8 @@ public static class FilteringSample
         }
 
         Console.WriteLine("\n✅ Advanced filtering sample completed!");
-        Console.WriteLine("\n🎉 Notice how much cleaner the new Tag API is compared to JSON parsing!");
+        Console.WriteLine(
+            "\n🎉 Notice how much cleaner the new Tag API is compared to JSON parsing!"
+        );
     }
 }
