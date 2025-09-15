@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Linq;
 using MySqlConnector;
 using SemanticSlicer;
 using TiDB.Vector.Abstractions;
@@ -61,7 +60,9 @@ namespace TiDB.Vector.Core
             // Create table with source and tags columns for efficient filtering
             // Require a fixed vector dimension for index support
             if (_embeddingDimension <= 0)
-                throw new InvalidOperationException("Embedding dimension must be set (> 0) before ensuring schema. Configure your embedding generator (e.g., AddOpenAITextEmbedding) or set a dimension on the builder.");
+                throw new InvalidOperationException(
+                    "Embedding dimension must be set (> 0) before ensuring schema. Configure your embedding generator (e.g., AddOpenAITextEmbedding) or set a dimension on the builder."
+                );
 
             string ddl =
                 $@"CREATE TABLE IF NOT EXISTS {_tableName} (
@@ -85,11 +86,14 @@ namespace TiDB.Vector.Core
             if (createIndex)
             {
                 if (_embeddingDimension <= 0)
-                    throw new InvalidOperationException("Embedding dimension must be set (> 0) to create a vector index.");
+                    throw new InvalidOperationException(
+                        "Embedding dimension must be set (> 0) to create a vector index."
+                    );
                 // Ensure the embedding column is fixed-dimension even if table pre-existed
                 try
                 {
-                    string alter = $"ALTER TABLE {_tableName} MODIFY COLUMN embedding VECTOR({_embeddingDimension}) NOT NULL;";
+                    string alter =
+                        $"ALTER TABLE {_tableName} MODIFY COLUMN embedding VECTOR({_embeddingDimension}) NOT NULL;";
                     await using var alterCmd = new MySqlCommand(alter, conn);
                     await alterCmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
@@ -99,7 +103,15 @@ namespace TiDB.Vector.Core
                 }
                 // Best effort: ensure a TiFlash replica exists (ignored if not supported or already set)
                 await EnsureTiFlashReplicaAsync(conn, cancellationToken).ConfigureAwait(false);
-                await CreateVectorIndexAsync(conn, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await CreateVectorIndexAsync(conn, cancellationToken).ConfigureAwait(false);
+                }
+                catch (MySqlException)
+                {
+                    // Swallow vector index creation errors (e.g., TiFlash unavailable/timeout)
+                    // Do not propagate to app level; index creation can be retried later.
+                }
             }
         }
 
@@ -198,10 +210,7 @@ ON DUPLICATE KEY UPDATE
                     cmd.Parameters.AddWithValue("@content", (object?)content ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("@metadata", metadataJson);
                     cmd.Parameters.AddWithValue("@source", (object?)item.Source ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue(
-                        "@tags",
-                        GetTagsJson(item)
-                    );
+                    cmd.Parameters.AddWithValue("@tags", GetTagsJson(item));
                     cmd.Parameters.AddWithValue("@embeddingText", embeddingTextChunk);
                     await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
@@ -391,10 +400,7 @@ ON DUPLICATE KEY UPDATE
                             : JsonSerializer.Serialize(item.Metadata)
                     );
                     cmd.Parameters.AddWithValue("@source", (object?)item.Source ?? DBNull.Value);
-                    cmd.Parameters.AddWithValue(
-                        "@tags",
-                        GetTagsJson(item)
-                    );
+                    cmd.Parameters.AddWithValue("@tags", GetTagsJson(item));
                     cmd.Parameters.AddWithValue("@embeddingText", embeddingText);
                     await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                 }
@@ -448,11 +454,15 @@ ON DUPLICATE KEY UPDATE
             }
 
             // Tag filtering with key-value pairs using dedicated tags JSON column
-            var tagFilters = searchOptions?.TagFilter?.Tags ??
-                           (searchOptions?.TagFilters != null ?
-                               searchOptions.TagFilters.Select(kvp => new Tag(kvp.Key, kvp.Value)) :
-                               null);
-            var tagMode = searchOptions?.TagFilter?.Mode ?? searchOptions?.TagMode ?? TagFilterMode.And;
+            var tagFilters =
+                searchOptions?.TagFilter?.Tags
+                ?? (
+                    searchOptions?.TagFilters != null
+                        ? searchOptions.TagFilters.Select(kvp => new Tag(kvp.Key, kvp.Value))
+                        : null
+                );
+            var tagMode =
+                searchOptions?.TagFilter?.Mode ?? searchOptions?.TagMode ?? TagFilterMode.And;
 
             if (tagFilters != null && tagFilters.Any())
             {
@@ -460,7 +470,9 @@ ON DUPLICATE KEY UPDATE
                 foreach (var tag in tagFilters)
                 {
                     var paramName = $"@tag_{tag.Key}";
-                    tagConditions.Add($"JSON_UNQUOTE(JSON_EXTRACT(tags, '$.{tag.Key}')) = {paramName}");
+                    tagConditions.Add(
+                        $"JSON_UNQUOTE(JSON_EXTRACT(tags, '$.{tag.Key}')) = {paramName}"
+                    );
                     parameters.Add((paramName, tag.Value));
                 }
 
@@ -473,7 +485,8 @@ ON DUPLICATE KEY UPDATE
 
             // To leverage ANN index, perform KNN first, then filter in outer query.
             int kPrime = Math.Max(topK * 3, topK + 20);
-            string whereClause = whereConditions.Count > 0 ? $"WHERE {string.Join(" AND ", whereConditions)}" : "";
+            string whereClause =
+                whereConditions.Count > 0 ? $"WHERE {string.Join(" AND ", whereConditions)}" : "";
 
             string sql =
                 $@"SELECT * FROM (
@@ -758,10 +771,11 @@ LIMIT @k";
                     ? "idx_tidb_vectors_embedding_cosine"
                     : "idx_tidb_vectors_embedding_l2";
 
+            string quotedTable = _tableName; // revert quoting to original behavior
             string createSql =
                 _distanceFunction == DistanceFunction.Cosine
-                    ? $"CREATE VECTOR INDEX {indexName} ON {_tableName} ((VEC_COSINE_DISTANCE(embedding))) USING HNSW;"
-                    : $"CREATE VECTOR INDEX {indexName} ON {_tableName} ((VEC_L2_DISTANCE(embedding))) USING HNSW;";
+                    ? $"CREATE VECTOR INDEX {indexName} ON {quotedTable} ((VEC_COSINE_DISTANCE(embedding))) USING HNSW;"
+                    : $"CREATE VECTOR INDEX {indexName} ON {quotedTable} ((VEC_L2_DISTANCE(embedding))) USING HNSW;";
 
             // Pre-check via INFORMATION_SCHEMA.TIFLASH_INDEXES if possible
             try
@@ -770,6 +784,7 @@ LIMIT @k";
                     @"SELECT COUNT(1) FROM INFORMATION_SCHEMA.TIFLASH_INDEXES
 WHERE TIDB_DATABASE = DATABASE() AND TIDB_TABLE = @table AND INDEX_NAME = @indexName;";
                 await using var existsCmd = new MySqlCommand(existsSql, conn);
+                existsCmd.CommandTimeout = 10; // quick best-effort
                 existsCmd.Parameters.AddWithValue("@indexName", indexName);
                 existsCmd.Parameters.AddWithValue("@table", _tableName);
                 var countObj = await existsCmd
@@ -788,23 +803,55 @@ WHERE TIDB_DATABASE = DATABASE() AND TIDB_TABLE = @table AND INDEX_NAME = @index
             try
             {
                 await using var cmd = new MySqlCommand(createSql, conn);
+                cmd.CommandTimeout = 30; // allow some time but not too long
                 await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (MySqlException ex)
             {
-                // Ignore if index already exists (message variants)
                 var msg = ex.Message ?? string.Empty;
                 var lower = msg.ToLowerInvariant();
+                // Ignore if index already exists
+                if (lower.Contains("already exist") || (lower.Contains("duplicate") && lower.Contains("index")))
+                {
+                    return;
+                }
+                // Swallow transient TiFlash connectivity/timeouts silently
                 if (
-                    lower.Contains("already exist")
-                    || (lower.Contains("duplicate") && lower.Contains("index"))
+                    lower.Contains("rpc error") ||
+                    lower.Contains("tiflash") ||
+                    lower.Contains("unavailable") ||
+                    lower.Contains("timeout") ||
+                    lower.Contains("operation canceled")
                 )
                 {
                     return;
                 }
-                throw;
+                // Fallback: try ALTER TABLE ADD VECTOR INDEX syntax
+                try
+                {
+                    string alterAdd =
+                        _distanceFunction == DistanceFunction.Cosine
+                            ? $"ALTER TABLE {quotedTable} ADD VECTOR INDEX {indexName} ((VEC_COSINE_DISTANCE(embedding))) USING HNSW;"
+                            : $"ALTER TABLE {quotedTable} ADD VECTOR INDEX {indexName} ((VEC_L2_DISTANCE(embedding))) USING HNSW;";
+                    await using var cmdAlt = new MySqlCommand(alterAdd, conn);
+                    cmdAlt.CommandTimeout = 30;
+                    await cmdAlt.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                catch (MySqlException altEx)
+                {
+                    var alt = (altEx.Message ?? string.Empty).ToLowerInvariant();
+                    if (alt.Contains("already exist") || (alt.Contains("duplicate") && alt.Contains("index")))
+                    {
+                        return;
+                    }
+                    // Finally rethrow original if not covered by transient conditions
+                    throw;
+                }
             }
         }
+
+        // Removed quoting helpers to avoid regressions with certain cluster configurations
 
         private static SlicerOptions BuildSlicerOptions(
             ContentType contentType,

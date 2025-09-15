@@ -27,7 +27,7 @@ public static class TableNameSample
             Id = "hello-1",
             Collection = "samples",
             Content = "Hello TiDB Vector!",
-            Tags = new[] { new Tag("Env", "Test"), new Tag("Sample", "TableName") }
+            Tags = new[] { new Tag("Env", "Test"), new Tag("Sample", "TableName") },
         };
 
         Console.WriteLine($"➡️ Upserting into table '{tableName}'...");

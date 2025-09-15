@@ -1,4 +1,3 @@
-using System;
 using TiDB.Vector.Abstractions;
 
 namespace TiDB.Vector.Core
@@ -25,12 +24,15 @@ namespace TiDB.Vector.Core
 
         public TiDBVectorStoreBuilder(string connectionString)
         {
-            _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
+            _connectionString =
+                connectionString ?? throw new ArgumentNullException(nameof(connectionString));
         }
 
         public TiDBVectorStoreBuilder WithDefaultCollection(string collection)
         {
-            _defaultCollection = string.IsNullOrWhiteSpace(collection) ? _defaultCollection : collection;
+            _defaultCollection = string.IsNullOrWhiteSpace(collection)
+                ? _defaultCollection
+                : collection;
             return this;
         }
 
@@ -78,12 +80,15 @@ namespace TiDB.Vector.Core
                 _embeddingGenerator,
                 _textGenerator,
                 _ensureSchema,
-                _createVectorIndex);
+                _createVectorIndex
+            );
         }
 
         // OpenAI configuration methods
         internal string? GetOpenAIApiKey() => _openAIApiKey;
+
         internal string? GetOpenAIEndpoint() => _openAIEndpoint;
+
         internal void SetOpenAIConfig(string apiKey, string? endpoint = null)
         {
             _openAIApiKey = apiKey;
@@ -92,7 +97,9 @@ namespace TiDB.Vector.Core
 
         // Azure OpenAI configuration methods
         public string? GetAzureOpenAIApiKey() => _azureOpenAIApiKey;
+
         public string? GetAzureOpenAIEndpoint() => _azureOpenAIEndpoint;
+
         public void SetAzureOpenAIConfig(string apiKey, string endpoint)
         {
             _azureOpenAIApiKey = apiKey;
@@ -100,5 +107,3 @@ namespace TiDB.Vector.Core
         }
     }
 }
-
-
