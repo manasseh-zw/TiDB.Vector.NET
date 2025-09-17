@@ -53,16 +53,17 @@ namespace TiDB.Vector.Core
         {
             bool createIndex = createVectorIndex ?? _createVectorIndex;
 
-            await using var conn = new MySqlConnection(_connectionString);
-            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
-
-            // Create table with composite PK (collection, id)
-            // Create table with source and tags columns for efficient filtering
             // Require a fixed vector dimension for index support
             if (_embeddingDimension <= 0)
                 throw new InvalidOperationException(
                     "Embedding dimension must be set (> 0) before ensuring schema. Configure your embedding generator (e.g., AddOpenAITextEmbedding) or set a dimension on the builder."
                 );
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+            // Create table with composite PK (collection, id)
+            // Create table with source and tags columns for efficient filtering
 
             string ddl =
                 $@"CREATE TABLE IF NOT EXISTS {_tableName} (
